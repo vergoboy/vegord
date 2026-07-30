@@ -14,6 +14,7 @@ import { app, BrowserWindow, nativeTheme } from "electron";
 
 import { DATA_DIR } from "./constants";
 import { createFirstLaunchTour } from "./firstLaunch";
+import { getCustomProxyAddress, getProxyAddress, isProxyDisabled, startProxy, stopProxy } from "./gfwProxy";
 import { createWindows, mainWin } from "./mainWindow";
 import { registerMediaPermissionsHandler } from "./mediaPermissions";
 import { registerScreenShareHandler } from "./screenShare";
@@ -78,7 +79,20 @@ function init() {
     disabledFeatures.add("HardwareMediaKeyHandling");
     disabledFeatures.add("MediaSessionService");
 
-    if (isLinux) {
+    if (isLinux && !isProxyDisabled()) {
+        // Use GFW-resistant proxy (unless --no-proxy passed or custom --proxy-server on CLI)
+        const customProxy = getCustomProxyAddress();
+        if (customProxy) {
+            console.log(`[Proxy] Using custom proxy: ${customProxy}`);
+        } else {
+            app.commandLine.appendSwitch("proxy-server", getProxyAddress());
+            console.log(`[Proxy] Using proxy: ${getProxyAddress()}`);
+        }
+
+        // Force all WebRTC traffic through proxy (critical for voice to work over SOCKS5)
+        app.commandLine.appendSwitch("webrtc-ip-handling-policy", "disable_non_proxied_udp");
+        console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
+
         // Support TTS on Linux using https://wiki.archlinux.org/title/Speech_dispatcher
         app.commandLine.appendSwitch("enable-speech-dispatcher");
 
@@ -86,6 +100,10 @@ function init() {
         // Supposed to be fixed already according to comments there, but it's just not lol, I can repro on Electron 43.0.0
         // when moving the window from my main monitor (HDR - not sure if this is relevant lol) to second monitor (SDR) and back
         disabledFeatures.add("WaylandWpColorManagerV1");
+
+        // Log voice-relevant Chrome flags for debugging
+        console.log("[Voice] Proxy SOCKS5=127.0.0.1:4500, WebRTC=disable_non_proxied_udp");
+        console.log("[Voice] If voice still fails, check chrome://webrtc-internals or run with --no-proxy");
     }
 
     disabledFeatures.forEach(feat => enabledFeatures.delete(feat));
@@ -101,6 +119,11 @@ function init() {
     if (disabledFeaturesArray.length) {
         app.commandLine.appendSwitch("disable-features", disabledFeaturesArray.join(","));
         console.log("Disabled Chromium features:", disabledFeaturesArray.join(", "));
+    }
+
+    // Start GFW-resistant proxy in background (unless --no-proxy is passed)
+    if (!isProxyDisabled()) {
+        startProxy();
     }
 
     // In the Flatpak on SteamOS the theme is detected as light, but SteamOS only has a dark mode, so we just override it
@@ -156,8 +179,13 @@ app.on("open-url", (_, url) => {
 });
 
 app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+    if (process.platform !== "darwin") {
+        stopProxy();
+        app.quit();
+    }
 });
+
+app.on("before-quit", stopProxy);
 
 // Sets the WebRTC IP handling policy for all current and future windows.
 // Switching to "default_public_and_private_interfaces" may fix calls stuck at "DTLS Connecting" when using VPNs, Tailscale, etc.

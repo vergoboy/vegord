@@ -5,7 +5,9 @@
  */
 
 import { BuildContext, BuildOptions, context } from "esbuild";
-import { copyFile } from "fs/promises";
+import { copyFile, cp, mkdir, readdir } from "fs/promises";
+import { existsSync } from "fs";
+import { join } from "path";
 
 import vencordDep from "./vencordDep.mjs";
 import { includeDirPlugin } from "./includeDirPlugin.mts";
@@ -53,6 +55,34 @@ async function copyVenmic() {
     ]).catch(() => console.warn("Failed to copy venmic. Building without venmic support"));
 }
 
+const EXCLUDE_DIRS = new Set([".venv", ".git", "__pycache__", "Android", "asset"]);
+
+async function copyGfwProxy(srcDir: string, destDir: string) {
+    console.log(`Copying GFW proxy files from ${srcDir} to ${destDir}...`);
+    await mkdir(destDir, { recursive: true });
+    const entries = await readdir(srcDir, { withFileTypes: true });
+    await Promise.all(
+        entries.map(async entry => {
+            const s = join(srcDir, entry.name);
+            const d = join(destDir, entry.name);
+            if (entry.isDirectory()) {
+                if (EXCLUDE_DIRS.has(entry.name)) return;
+                await copyGfwProxy(s, d);
+            } else if (entry.isFile()) {
+                await copyFile(s, d);
+            }
+        })
+    );
+}
+
+async function copyGfwProxyWrapper() {
+    const src = "./gfw_resist_HTTPS_proxy";
+    const dest = "./static/gfw_proxy";
+    return copyGfwProxy(src, dest).catch(err =>
+        console.warn("Failed to copy GFW proxy files:", err.message)
+    );
+}
+
 async function copyLibVesktop() {
     if (process.platform !== "linux") return;
 
@@ -76,6 +106,7 @@ async function copyLibVesktop() {
 await Promise.all([
     copyVenmic(),
     copyLibVesktop(),
+    copyGfwProxyWrapper(),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/index.ts"],

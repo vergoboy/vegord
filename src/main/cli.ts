@@ -46,6 +46,11 @@ const options = {
     repair: {
         type: "boolean",
         description: "Repair the application by re-downloading the latest Vencord files"
+    },
+    "no-proxy": {
+        type: "boolean",
+        hidden: true,
+        description: "Disable the built-in GFW-resistant proxy"
     }
 } satisfies Record<string, Option>;
 
