@@ -5,7 +5,7 @@
  */
 
 import { mkdirSync } from "fs";
-import { access, constants as FsConstants, writeFile } from "fs/promises";
+import { access, constants as FsConstants, copyFile, writeFile } from "fs/promises";
 import { VENCORD_FILES_DIR } from "main/vencordFilesDir";
 import { join } from "path";
 
@@ -13,6 +13,7 @@ import { USER_AGENT } from "../constants";
 import { downloadFile, fetchie } from "./http";
 
 const API_BASE = "https://api.github.com";
+const BUNDLED_VENCORD_DIR = join(__dirname, "..", "..", "static", "vencordFiles");
 
 export const FILES_TO_DOWNLOAD = [
     "vencordDesktopMain.js",
@@ -68,10 +69,23 @@ export async function isValidVencordInstall(dir: string) {
     return !results.includes(false);
 }
 
-export async function ensureVencordFiles() {
-    if (await isValidVencordInstall(VENCORD_FILES_DIR)) return;
+export async function copyBundledVencordFiles() {
+    if (!(await existsAsync(BUNDLED_VENCORD_DIR))) return false;
+
+    await Promise.all(
+        FILES_TO_DOWNLOAD.map(f => copyFile(join(BUNDLED_VENCORD_DIR, f), join(VENCORD_FILES_DIR, f)))
+    );
+    return true;
+}
+
+export async function ensureVencordFiles(force = false) {
+    if (!force && (await isValidVencordInstall(VENCORD_FILES_DIR))) return;
 
     mkdirSync(VENCORD_FILES_DIR, { recursive: true });
 
-    await Promise.all([downloadVencordFiles(), writeFile(join(VENCORD_FILES_DIR, "package.json"), "{}")]);
+    if (!(await copyBundledVencordFiles())) {
+        await Promise.all([downloadVencordFiles(), writeFile(join(VENCORD_FILES_DIR, "package.json"), "{}")]);
+    } else {
+        await writeFile(join(VENCORD_FILES_DIR, "package.json"), "{}");
+    }
 }

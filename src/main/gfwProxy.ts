@@ -7,7 +7,7 @@
 import { ChildProcess, spawn } from "child_process";
 import { app } from "electron";
 import { existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 
 let proxyProcess: ChildProcess | null = null;
 
@@ -15,21 +15,24 @@ const PROXY_PORT = 4500;
 const PROXY_HOST = "127.0.0.1";
 
 function getProxyDir() {
-    // When packaged, executable files cannot be spawned from inside the asar
-    // archive (ENOENT on Windows). They are unpacked via "asarUnpack" in
-    // package.json, so look there first.
+    const candidates: string[] = [];
     if (app.isPackaged) {
-        const unpacked = join(process.resourcesPath, "app.asar.unpacked", "static", "gfw_proxy");
-        if (existsSync(unpacked)) {
-            return unpacked;
-        }
-        return join(process.resourcesPath, "gfw_proxy");
+        // When packaged, executable files cannot be spawned from inside the
+        // asar archive (ENOENT on Windows). They are unpacked via
+        // "asarUnpack" in package.json, so look there first.
+        candidates.push(join(process.resourcesPath, "app.asar.unpacked", "static", "gfw_proxy"));
+        candidates.push(join(process.resourcesPath, "gfw_proxy"));
     }
-    const staticDir = join(__dirname, "..", "..", "static", "gfw_proxy");
-    if (existsSync(staticDir)) {
-        return staticDir;
+    // Running from a source checkout or the Arch package (which runs the app
+    // unpackaged through the system electron, where app.isPackaged is still
+    // true but resourcesPath points at the electron installation)
+    candidates.push(join(__dirname, "..", "..", "static", "gfw_proxy"));
+    candidates.push("/opt/vegord/static/gfw_proxy");
+
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) return candidate;
     }
-    return join(__dirname, "..", "..", "gfw_resist_HTTPS_proxy");
+    return candidates[0];
 }
 
 function getProxyBinaryName() {
@@ -65,7 +68,7 @@ export function startProxy() {
         if (rustBinary) {
             console.log(`${logPrefix} Starting high-performance Rust proxy binary at ${rustBinary}`);
             proxyProcess = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
-                cwd: dir,
+                cwd: dirname(rustBinary),
                 stdio: ["ignore", "pipe", "pipe"],
                 env: {
                     ...process.env,

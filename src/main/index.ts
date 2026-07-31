@@ -7,11 +7,11 @@
 import { app } from "electron";
 
 import { CommandLine } from "./cli";
-import { downloadVencordFiles } from "./utils/vencordLoader";
+import { ensureVencordFiles } from "./utils/vencordLoader";
 
 if (CommandLine.values.repair) {
     console.log("Repairing Vegcord...");
-    downloadVencordFiles().then(() => app.quit());
+    ensureVencordFiles(true).then(() => app.quit());
 } else {
     require("./main");
 }

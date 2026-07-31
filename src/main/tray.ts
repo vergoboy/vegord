@@ -11,7 +11,7 @@ import { AppEvents } from "./events";
 import { Settings } from "./settings";
 import { resolveAssetPath } from "./userAssets";
 import { clearData } from "./utils/clearData";
-import { downloadVencordFiles } from "./utils/vencordLoader";
+import { ensureVencordFiles } from "./utils/vencordLoader";
 
 let tray: Tray;
 let trayVariant: "tray" | "trayUnread" = "tray";
@@ -55,7 +55,7 @@ export async function initTray(win: BrowserWindow, setIsQuitting: (val: boolean)
         {
             label: "Repair Vencord",
             async click() {
-                await downloadVencordFiles();
+                await ensureVencordFiles(true);
                 app.relaunch();
                 app.quit();
             }

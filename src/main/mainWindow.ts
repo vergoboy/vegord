@@ -34,7 +34,7 @@ import { destroyTray, initTray } from "./tray";
 import { clearData } from "./utils/clearData";
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
 import { applyDeckKeyboardFix, askToApplySteamLayout, isDeckGameMode } from "./utils/steamOS";
-import { downloadVencordFiles, ensureVencordFiles } from "./utils/vencordLoader";
+import { ensureVencordFiles } from "./utils/vencordLoader";
 import { VENCORD_FILES_DIR } from "./vencordFilesDir";
 
 let isQuitting = false;
@@ -83,7 +83,7 @@ function initMenuBar(win: BrowserWindow) {
         {
             label: "Force Update Vencord",
             async click() {
-                await downloadVencordFiles();
+                await ensureVencordFiles(true);
                 app.relaunch();
                 app.quit();
             },
