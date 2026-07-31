@@ -28,10 +28,18 @@ pub struct DohPerf {
     pub rtt_ms: Vec<f64>,
 }
 
+/// Shared state for a single in-flight DoH lookup so concurrent queries for the
+/// same host coalesce into one network request instead of hammering DoH servers.
+struct PendingQuery {
+    done: bool,
+    result: Option<IpAddr>,
+}
+
 pub struct DohClient {
     config: Config,
     http_client: Client,
     dns_cache: RwLock<HashMap<String, IpAddr>>,
+    pending: parking_lot::RwLock<HashMap<String, Arc<tokio::sync::Mutex<PendingQuery>>>>,
     discord_mgr: Arc<DiscordManager>,
     pub current_doh_index: AtomicUsize,
     pub total_queries: AtomicU64,
@@ -70,6 +78,7 @@ impl DohClient {
             config,
             http_client,
             dns_cache: RwLock::new(HashMap::new()),
+            pending: parking_lot::RwLock::new(HashMap::new()),
             discord_mgr,
             current_doh_index: AtomicUsize::new(0),
             total_queries: AtomicU64::new(0),
@@ -161,7 +170,47 @@ impl DohClient {
             }
         }
 
-        // 3. Perform DoH resolution
+        // 3. Single-flight: coalesce concurrent queries for the same host so the
+        //    DoH servers are not hammered with parallel duplicate lookups.
+        let waiter = {
+            let mut pending = self.pending.write();
+            match pending.get(server_name) {
+                Some(shared) => {
+                    println!(
+                        "[{}] [DNS] coalescing in-flight query for {}",
+                        now_iso(),
+                        server_name
+                    );
+                    shared.clone()
+                }
+                None => {
+                    let shared = Arc::new(tokio::sync::Mutex::new(PendingQuery {
+                        done: false,
+                        result: None,
+                    }));
+                    pending.insert(server_name.to_string(), shared.clone());
+                    shared
+                }
+            }
+        };
+
+        let mut guard = waiter.lock().await;
+        if guard.done {
+            return guard.result;
+        }
+
+        // We are the leader: perform the actual DoH resolution while followers wait.
+        let result = self.resolve_via_doh(server_name).await;
+        guard.done = true;
+        guard.result = result;
+        drop(guard);
+
+        // Let a future query for this host start fresh (the DNS cache absorbs hits).
+        self.pending.write().remove(server_name);
+        result
+    }
+
+    async fn resolve_via_doh(&self, server_name: &str) -> Option<IpAddr> {
         self.total_queries.fetch_add(1, Ordering::Relaxed);
         let is_discord = DiscordManager::is_discord_domain(server_name);
         println!(

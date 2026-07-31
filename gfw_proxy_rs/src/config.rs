@@ -18,6 +18,7 @@ pub struct Config {
     pub discord_ping_interval_sec: u64,
     pub discord_ping_timeout_sec: u64,
     pub discord_max_ips: usize,
+    pub discord_min_rtt_ms: f64,
     pub data_dir: PathBuf,
 }
 
@@ -25,8 +26,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             listen_port: 4500,
-            num_fragment: 87,
-            fragment_sleep_ms: 5,
+            num_fragment: 6,
+            fragment_sleep_ms: 1,
             log_every_sec: 30,
             allow_insecure: true,
             socket_timeout_sec: 8,
@@ -38,6 +39,7 @@ impl Default for Config {
             discord_ping_interval_sec: 30,
             discord_ping_timeout_sec: 3,
             discord_max_ips: 20,
+            discord_min_rtt_ms: 1.0,
             data_dir: PathBuf::from("."),
         }
     }

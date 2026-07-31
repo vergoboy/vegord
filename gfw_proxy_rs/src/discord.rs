@@ -106,7 +106,19 @@ impl DiscordManager {
                         Ok(Ok(stream)) => {
                             let rtt = t0.elapsed().as_secs_f64() * 1000.0;
                             drop(stream);
-                            Some((rtt * 10.0).round() / 10.0)
+                            let rtt = (rtt * 10.0).round() / 10.0;
+                            if rtt < config.discord_min_rtt_ms {
+                                println!(
+                                    "[{}] [DISCORD] implausible RTT {:.1}ms for {} (< {}ms, likely ISP interception), ignoring",
+                                    crate::stats::now_iso(),
+                                    rtt,
+                                    ip,
+                                    config.discord_min_rtt_ms
+                                );
+                                None
+                            } else {
+                                Some(rtt)
+                            }
                         }
                         _ => None,
                     };

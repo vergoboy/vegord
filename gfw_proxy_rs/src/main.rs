@@ -67,7 +67,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     println!(
-        "[{}] [INIT] Vegord Rust GFW Proxy v3.0.0 starting on port {} (data dir: {})",
+        "[{}] [INIT] Vegord Rust GFW Proxy v3.1.0 starting on port {} (data dir: {})",
         stats::now_iso(),
         config.listen_port,
         config.data_dir.display()

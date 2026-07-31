@@ -15,12 +15,19 @@ const PROXY_PORT = 4500;
 const PROXY_HOST = "127.0.0.1";
 
 function getProxyDir() {
+    // When packaged, executable files cannot be spawned from inside the asar
+    // archive (ENOENT on Windows). They are unpacked via "asarUnpack" in
+    // package.json, so look there first.
+    if (app.isPackaged) {
+        const unpacked = join(process.resourcesPath, "app.asar.unpacked", "static", "gfw_proxy");
+        if (existsSync(unpacked)) {
+            return unpacked;
+        }
+        return join(process.resourcesPath, "gfw_proxy");
+    }
     const staticDir = join(__dirname, "..", "..", "static", "gfw_proxy");
     if (existsSync(staticDir)) {
         return staticDir;
-    }
-    if (app.isPackaged) {
-        return join(process.resourcesPath, "gfw_proxy");
     }
     return join(__dirname, "..", "..", "gfw_resist_HTTPS_proxy");
 }
