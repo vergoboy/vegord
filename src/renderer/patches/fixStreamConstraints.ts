@@ -1,13 +1,13 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { Logger } from "@vencord/types/utils";
 import { MediaEngineStore } from "@vencord/types/webpack/common";
 
-const logger = new Logger("VesktopStreamFixes");
+const logger = new Logger("VegcordStreamFixes");
 
 function fixAudioTrackConstraints(constraint: MediaTrackConstraints) {
     const target = constraint.advanced?.find(opt => Object.hasOwn(opt, "autoGainControl")) ?? constraint;

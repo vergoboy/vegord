@@ -1,12 +1,13 @@
-# Maintainer: Vesktop with GFW proxy
+# Maintainer: Vegcord with GFW proxy
 # Build from local source tree. Run: makepkg -si
+# NOTE: Run pnpm build first
 
-pkgname=vesktop-gfw-proxy
+pkgname=vegord-gfw-proxy
 pkgver=1.6.5
 pkgrel=2
-pkgdesc="Vesktop - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
+pkgdesc="Vegcord - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
 arch=('x86_64' 'aarch64')
-url="https://github.com/Vencord/Vesktop"
+url="https://github.com/vergoboy/Vegcord"
 license=('GPL3')
 depends=(
     'electron>=43'
@@ -17,80 +18,71 @@ depends=(
     'libxtst'
     'glibc'
 )
-makedepends=('nodejs>=22' 'pnpm>=11' 'git' 'python' 'python-dnspython' 'python-requests')
 optdepends=(
     'pipewire: Linux screenshare with audio'
     'speech-dispatcher: TTS support'
 )
-source=("${pkgname}::git+file://${PWD}")
-sha256sums=('SKIP')
-
-prepare() {
-    cd "${srcdir}/${pkgname}"
-    # GFW proxy files are untracked in git, so copy from the original project
-    cp -r "$startdir/gfw_resist_HTTPS_proxy" .
-    pnpm install
-}
-
-build() {
-    cd "${srcdir}/${pkgname}"
-    pnpm build
-}
+install=vegord.install
+options=(!purge !strip !zipman)
+noextract=()
 
 package() {
-    cd "${srcdir}/${pkgname}"
+    cd "$startdir"
 
-    # Ensure proxy files exist (build.mts copies them, but fallback if it failed)
-    if [ ! -d "static/gfw_proxy" ]; then
-        cp -r "$startdir/gfw_resist_HTTPS_proxy"/. static/gfw_proxy/
-    fi
+    install -dm755 "${pkgdir}/opt/vegord/dist"
+    cp -r dist/js "${pkgdir}/opt/vegord/dist/"
+    cp -r static package.json LICENSE "${pkgdir}/opt/vegord/"
 
-    install -dm755 "${pkgdir}/opt/vesktop/dist"
-    cp -r dist/js "${pkgdir}/opt/vesktop/dist/"
-    cp -r static package.json LICENSE "${pkgdir}/opt/vesktop/"
+    install -Dm644 build/icon.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vegord.svg"
+    install -Dm644 build/icon-48.png "${pkgdir}/usr/share/icons/hicolor/48x48/apps/vegord.png" 2>/dev/null || true
+    install -Dm644 build/icon.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/vegord.png" 2>/dev/null || true
+    install -Dm644 build/icon-512.png "${pkgdir}/usr/share/icons/hicolor/512x512/apps/vegord.png" 2>/dev/null || true
 
-    # Install icons
-    install -Dm644 build/icon.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/vesktop-gfw.svg"
-    install -Dm644 build/icon.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/vesktop-gfw.png" 2>/dev/null || true
+    cp build/icon.png "${pkgdir}/opt/vegord/static/icon.png"
 
-    # Desktop entry
-    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/vesktop-gfw.desktop" <<EOF
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/vegord.desktop" <<EOF
 [Desktop Entry]
-Name=Vesktop GFW
+Name=Vegcord
 Comment=Custom Discord desktop app with GFW-resistant proxy
-Exec=/opt/vesktop/vesktop.sh %U
-Icon=vesktop-gfw
+Exec=/opt/vegord/vegord.sh %U
+Icon=vegord
 Terminal=false
 Type=Application
 Categories=Network;InstantMessaging;Chat;
 MimeType=x-scheme-handler/discord;
-StartupWMClass=vesktop
+StartupWMClass=vegord
 Keywords=discord;vencord;electron;chat;
 EOF
 
-    # Startup script - launches electron with the main app bundle
-    install -Dm755 /dev/stdin "${pkgdir}/opt/vesktop/vesktop.sh" <<EOF
-#!/bin/bash
-# Vesktop launcher with GFW-resistant proxy support
-# Pass --no-proxy to disable the built-in SOCKS5 proxy
-exec /usr/bin/electron /opt/vesktop/dist/js/main.js "\$@"
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/vegord-gfw.desktop" <<EOF
+[Desktop Entry]
+Name=Vegcord GFW
+Comment=Custom Discord desktop app with GFW-resistant proxy
+Exec=/opt/vegord/vegord.sh %U
+Icon=vegord
+Terminal=false
+Type=Application
+Categories=Network;InstantMessaging;Chat;
+MimeType=x-scheme-handler/discord;
+StartupWMClass=vegord
+Keywords=discord;vencord;electron;chat;
 EOF
 
-    # Symlink for CLI (unique name to avoid conflict with original vesktop AUR package)
+    install -Dm755 /dev/stdin "${pkgdir}/opt/vegord/vegord.sh" <<'SCRIPT'
+#!/bin/bash
+exec /usr/bin/electron --class=vegord /opt/vegord/dist/js/main.js "$@"
+SCRIPT
+
     install -dm755 "${pkgdir}/usr/bin"
-    ln -sf /opt/vesktop/vesktop.sh "${pkgdir}/usr/bin/vesktop-gfw"
+    ln -sf /opt/vegord/vegord.sh "${pkgdir}/usr/bin/vegord"
+    ln -sf /opt/vegord/vegord.sh "${pkgdir}/usr/bin/vegord-gfw"
 
-    # Additional launcher aliases
-    install -Dm755 /dev/stdin "${pkgdir}/usr/bin/vesktop-gfw-proxy" <<EOF
+    install -Dm755 /dev/stdin "${pkgdir}/usr/bin/vegord-gfw-proxy" <<'SCRIPT'
 #!/bin/bash
-exec /opt/vesktop/vesktop.sh "\$@"
-EOF
-    ln -sf /opt/vesktop/vesktop.sh "${pkgdir}/usr/bin/vesktop-gfw-original"
+exec /opt/vegord/vegord.sh "$@"
+SCRIPT
 
-    # Clean up any __pycache__ or .pyc files from the proxy directory
-    find "${pkgdir}/opt/vesktop/static" -name '__pycache__' -type d -prune -exec rm -rf {} \; 2>/dev/null || true
-    find "${pkgdir}/opt/vesktop/static" -name '*.pyc' -delete 2>/dev/null || true
-
-    # Create log directory for proxy
-    install -dm755 "${pkgdir}/opt/vesktop/static/gfw_proxy/logs"
+    find "${pkgdir}/opt/vegord/static" -name '__pycache__' -type d -prune -exec rm -rf {} \; 2>/dev/null || true
+    find "${pkgdir}/opt/vegord/static" -name '*.pyc' -delete 2>/dev/null || true
+    install -dm755 "${pkgdir}/opt/vegord/static/gfw_proxy/logs"
 }

@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -12,7 +12,7 @@ import { SimpleErrorBoundary } from "../SimpleErrorBoundary";
 import { SettingsComponent } from "./Settings";
 
 export const WindowsTransparencyControls: SettingsComponent = ({ settings }) => {
-    if (!VesktopNative.app.supportsWindowsTransparency()) return null;
+    if (!VegcordNative.app.supportsWindowsTransparency()) return null;
 
     return (
         <div>
@@ -36,7 +36,7 @@ export const WindowsTransparencyControls: SettingsComponent = ({ settings }) => 
                         },
                         { label: "Tabbed (variant of Mica with stronger background tinting)", value: "tabbed" },
                         {
-                            label: "Acrylic (blurs the window behind Vesktop for a translucent background)",
+                            label: "Acrylic (blurs the window behind Vegcord for a translucent background)",
                             value: "acrylic"
                         }
                     ]}

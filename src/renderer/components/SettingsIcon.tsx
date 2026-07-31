@@ -1,12 +1,12 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { IconProps } from "@vencord/types/utils/types";
 
-export function VesktopSettingsIcon(props: IconProps) {
+export function VegcordSettingsIcon(props: IconProps) {
     return (
         <svg {...props} viewBox="0 0 24 24">
             <path

@@ -1,17 +1,17 @@
 {
-    "name": "vesktop",
+    "name": "vegord",
     "version": "1.6.5",
     "private": true,
-    "description": "Vesktop is a custom Discord desktop app",
+    "description": "Vegcord is a custom Discord desktop app",
     "keywords": [],
-    "homepage": "https://vencord.dev/",
+    "homepage": "https://vergoboy.ir/vegord",
     "license": "GPL-3.0-or-later",
-    "author": "Vendicated <vendicated@riseup.net>",
+    "author": "Vergoboy",
     "main": "dist/js/main.js",
     "scripts": {
         "build": "tsx scripts/build/build.mts",
         "build:dev": "pnpm build --dev",
-        "buildLibVesktop": "pnpm -C packages/libvesktop install && pnpm -C packages/libvesktop run build",
+        "buildLibVegcord": "pnpm -C packages/libvegord install && pnpm -C packages/libvegord run build",
         "package": "pnpm build && electron-builder",
         "package:dir": "pnpm build && electron-builder --dir",
         "lint": "eslint",
@@ -51,7 +51,7 @@
         "eslint-plugin-simple-header": "^1.2.2",
         "eslint-plugin-simple-import-sort": "^13.0.0",
         "eslint-plugin-unused-imports": "^4.4.1",
-        "libvesktop": "link:packages/libvesktop",
+        "libvegord": "link:packages/libvegord",
         "prettier": "^3.9.4",
         "source-map-support": "^0.5.21",
         "tsx": "^4.22.4",
@@ -66,9 +66,9 @@
         "pnpm": ">=11"
     },
     "build": {
-        "appId": "dev.vencord.vesktop",
-        "productName": "Vesktop",
-        "executableName": "vesktop",
+        "appId": "dev.vergoboy.vegord",
+        "productName": "Vegcord",
+        "executableName": "vegord",
         "files": [
             "!*",
             "!node_modules",
@@ -88,7 +88,7 @@
         "linux": {
             "icon": "build/icon.svg",
             "category": "Network",
-            "maintainer": "vendicated+vesktop@riseup.net",
+            "maintainer": "vergoboy+vegord@riseup.net",
             "target": [
                 {
                     "target": "deb",
@@ -121,13 +121,13 @@
             ],
             "desktop": {
                 "entry": {
-                    "Name": "Vesktop",
+                    "Name": "Vegcord",
                     "GenericName": "Internet Messenger",
                     "Type": "Application",
                     "Categories": "Network;InstantMessaging;Chat;",
                     "Keywords": "discord;vencord;electron;chat;",
                     "MimeType": "x-scheme-handler/discord",
-                    "StartupWMClass": "vesktop"
+                    "StartupWMClass": "vegord"
                 }
             }
         },

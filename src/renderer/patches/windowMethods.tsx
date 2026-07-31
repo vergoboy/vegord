@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2025 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -13,15 +13,15 @@ addPatch({
             replacement: [
                 {
                     match: /\i\.window\.(close|minimize|maximize)/g,
-                    replace: `VesktopNative.win.$1`
+                    replace: `VegcordNative.win.$1`
                 },
                 {
                     match: /(focus(\(\i\)){).{0,150}?\.focus\(\i,\i\)/,
-                    replace: "$1VesktopNative.win.focus$2"
+                    replace: "$1VegcordNative.win.focus$2"
                 },
                 {
                     match: /,getEnableHardwareAcceleration/,
-                    replace: "$&:VesktopNative.app.getEnableHardwareAcceleration,_oldGetEnableHardwareAcceleration"
+                    replace: "$&:VegcordNative.app.getEnableHardwareAcceleration,_oldGetEnableHardwareAcceleration"
                 }
             ]
         }

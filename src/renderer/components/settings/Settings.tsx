@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -17,9 +17,9 @@ import { AutoStartToggle } from "./AutoStartToggle";
 import { DeveloperOptionsButton } from "./DeveloperOptions";
 import { DiscordBranchPicker } from "./DiscordBranchPicker";
 import { NotificationBadgeToggle } from "./NotificationBadgeToggle";
-import { OutdatedVesktopWarning } from "./OutdatedVesktopWarning";
+import { OutdatedVegcordWarning } from "./OutdatedVegcordWarning";
 import { UserAssetsButton } from "./UserAssets";
-import { VesktopSettingsSwitch } from "./VesktopSettingsSwitch";
+import { VegcordSettingsSwitch } from "./VegcordSettingsSwitch";
 import { WindowsTransparencyControls } from "./WindowsTransparencyControls";
 
 interface BooleanSetting {
@@ -64,7 +64,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "staticTitle",
             title: "Static Title",
-            description: 'Makes the window title "Vesktop" instead of changing to the current page',
+            description: 'Makes the window title "Vegcord" instead of changing to the current page',
             defaultValue: false
         },
         {
@@ -78,7 +78,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
             key: "enableSplashScreen",
             title: "Enable Splash Screen",
             description:
-                "Shows a small splash screen while Vesktop is loading. Disabling this option will show the main window earlier while it's still loading.",
+                "Shows a small splash screen while Vegcord is loading. Disabling this option will show the main window earlier while it's still loading.",
             defaultValue: true
         },
         {
@@ -94,14 +94,14 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "tray",
             title: "Tray Icon",
-            description: "Add a tray icon for Vesktop",
+            description: "Add a tray icon for Vegcord",
             defaultValue: true,
             invisible: () => isMac
         },
         {
             key: "minimizeToTray",
             title: "Minimize to tray",
-            description: "Hitting X will make Vesktop minimize to the tray instead of closing",
+            description: "Hitting X will make Vegcord minimize to the tray instead of closing",
             defaultValue: true,
             invisible: () => isMac,
             disabled: () => Settings.store.tray === false
@@ -109,7 +109,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "clickTrayToShowHide",
             title: "Hide/Show on tray click",
-            description: "Left clicking tray icon will toggle the vesktop window visibility.",
+            description: "Left clicking tray icon will toggle the vegord window visibility.",
             defaultValue: false
         },
         {
@@ -145,7 +145,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "openLinksWithElectron",
             title: "Open Links in app (experimental)",
-            description: "Opens links in a new Vesktop window instead of your web browser",
+            description: "Opens links in a new Vegcord window instead of your web browser",
             defaultValue: false
         },
 
@@ -172,7 +172,7 @@ function SettingsSections() {
                     if (invisible?.()) return null;
 
                     return (
-                        <VesktopSettingsSwitch
+                        <VegcordSettingsSwitch
                             title={title}
                             description={description}
                             value={Settings[key as any] ?? defaultValue}
@@ -195,13 +195,13 @@ export default ErrorBoundary.wrap(
     function SettingsUI() {
         return (
             <section>
-                <OutdatedVesktopWarning />
+                <OutdatedVegcordWarning />
                 <SettingsSections />
             </section>
         );
     },
     {
         message:
-            "Failed to render the Vesktop Settings tab. If this issue persists, try to right click the Vesktop tray icon, then click 'Repair Vencord'. And make sure your Vesktop is up to date."
+            "Failed to render the Vegcord Settings tab. If this issue persists, try to right click the Vegcord tray icon, then click 'Repair Vencord'. And make sure your Vegcord is up to date."
     }
 );

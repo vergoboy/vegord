@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -61,7 +61,7 @@ export async function initTray(win: BrowserWindow, setIsQuitting: (val: boolean)
             }
         },
         {
-            label: "Reset Vesktop",
+            label: "Reset Vegcord",
             async click() {
                 await clearData(win);
             }
@@ -86,7 +86,7 @@ export async function initTray(win: BrowserWindow, setIsQuitting: (val: boolean)
     ]);
 
     tray = new Tray(await resolveAssetPath(trayVariant));
-    tray.setToolTip("Vesktop");
+    tray.setToolTip("Vegcord");
     tray.setContextMenu(trayMenu);
     tray.on("click", onTrayClick);
 }

@@ -1,12 +1,12 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { ChildProcess, spawn } from "child_process";
 import { app } from "electron";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 
 let proxyProcess: ChildProcess | null = null;
@@ -15,49 +15,83 @@ const PROXY_PORT = 4500;
 const PROXY_HOST = "127.0.0.1";
 
 function getProxyDir() {
-    if (app.isPackaged) {
-        return join(process.resourcesPath, "gfw_proxy");
-    }
     const staticDir = join(__dirname, "..", "..", "static", "gfw_proxy");
     if (existsSync(staticDir)) {
         return staticDir;
     }
+    if (app.isPackaged) {
+        return join(process.resourcesPath, "gfw_proxy");
+    }
     return join(__dirname, "..", "..", "gfw_resist_HTTPS_proxy");
+}
+
+function getProxyBinaryName() {
+    return process.platform === "win32" ? "gfw_proxy.exe" : "gfw_proxy";
+}
+
+function findRustBinary(dir: string): string | null {
+    const binName = getProxyBinaryName();
+    const candidate1 = join(dir, binName);
+    if (existsSync(candidate1)) return candidate1;
+
+    const candidate2 = join(__dirname, "..", "..", "gfw_proxy_rs", "target", "release", binName);
+    if (existsSync(candidate2)) return candidate2;
+
+    const candidate3 = join("/opt/vegord", "static", "gfw_proxy", binName);
+    if (existsSync(candidate3)) return candidate3;
+
+    return null;
 }
 
 export function startProxy() {
     const dir = getProxyDir();
+    const rustBinary = findRustBinary(dir);
     const script = join(dir, "pyprox_HTTPS_v3.0.py");
 
     const logPrefix = "[GFW Proxy]";
 
-    if (!existsSync(script)) {
-        console.error(`${logPrefix} Script not found at ${script}. Skipping proxy startup.`);
-        return;
-    }
+    // Create writable proxy data directory for logs
+    const proxyDataDir = join(app.getPath("userData"), "proxy");
+    mkdirSync(proxyDataDir, { recursive: true });
 
     try {
-        proxyProcess = spawn("python3", [script], {
-            cwd: dir,
-            stdio: ["ignore", "pipe", "pipe"],
-            env: { ...process.env, PYTHONUNBUFFERED: "1" }
-        });
+        if (rustBinary) {
+            console.log(`${logPrefix} Starting high-performance Rust proxy binary at ${rustBinary}`);
+            proxyProcess = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
+                cwd: dir,
+                stdio: ["ignore", "pipe", "pipe"],
+                env: {
+                    ...process.env,
+                    VEGORD_PROXY_DATA_DIR: proxyDataDir,
+                    VEGORD_PROXY_PORT: String(PROXY_PORT)
+                }
+            });
+        } else if (existsSync(script)) {
+            console.log(`${logPrefix} Rust binary not found, falling back to Python script at ${script}`);
+            proxyProcess = spawn("python3", [script], {
+                cwd: dir,
+                stdio: ["ignore", "pipe", "pipe"],
+                env: { ...process.env, PYTHONUNBUFFERED: "1", VEGORD_PROXY_DATA_DIR: proxyDataDir }
+            });
+        } else {
+            console.error(`${logPrefix} Neither Rust binary nor Python script found in ${dir}. Skipping proxy startup.`);
+            return;
+        }
 
         proxyProcess.stdout?.on("data", (data: Buffer) => {
             for (const line of data.toString().trim().split("\n")) {
-                console.log(`${logPrefix} ${line}`);
+                if (line) console.log(`${logPrefix} ${line}`);
             }
         });
 
         proxyProcess.stderr?.on("data", (data: Buffer) => {
             for (const line of data.toString().trim().split("\n")) {
-                console.error(`${logPrefix} ${line}`);
+                if (line) console.error(`${logPrefix} ${line}`);
             }
         });
 
         proxyProcess.on("error", err => {
             console.error(`${logPrefix} Failed to start proxy:`, err.message);
-            console.error(`${logPrefix} Make sure python3, dnspython, and requests are installed`);
         });
 
         proxyProcess.on("exit", (code, signal) => {

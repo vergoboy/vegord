@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2025 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -29,7 +29,7 @@ function openDeveloperOptionsModal(settings: Settings) {
         <ModalRoot {...props} size={ModalSize.MEDIUM}>
             <ModalHeader>
                 <BaseText size="lg" weight="semibold" tag="h3" style={{ flexGrow: 1 }}>
-                    Vesktop Developer Options
+                    Vegcord Developer Options
                 </BaseText>
                 <ModalCloseButton onClick={props.onClose} />
             </ModalHeader>
@@ -43,8 +43,8 @@ function openDeveloperOptionsModal(settings: Settings) {
                         Debugging
                     </Heading>
                     <div className={cl("button-grid")}>
-                        <Button onClick={() => VesktopNative.debug.launchGpu()}>Open chrome://gpu</Button>
-                        <Button onClick={() => VesktopNative.debug.launchWebrtcInternals()}>
+                        <Button onClick={() => VegcordNative.debug.launchGpu()}>Open chrome://gpu</Button>
+                        <Button onClick={() => VegcordNative.debug.launchWebrtcInternals()}>
                             Open chrome://webrtc-internals
                         </Button>
                     </div>
@@ -56,7 +56,7 @@ function openDeveloperOptionsModal(settings: Settings) {
 
 const VencordLocationPicker: SettingsComponent = ({ settings }) => {
     const forceUpdate = useForceUpdater();
-    const usingCustomVencordDir = VesktopNative.fileManager.isUsingCustomVencordDir();
+    const usingCustomVencordDir = VegcordNative.fileManager.isUsingCustomVencordDir();
 
     return (
         <>
@@ -67,7 +67,7 @@ const VencordLocationPicker: SettingsComponent = ({ settings }) => {
                         variant="link"
                         onClick={e => {
                             e.preventDefault();
-                            VesktopNative.fileManager.showCustomVencordDir();
+                            VegcordNative.fileManager.showCustomVencordDir();
                         }}
                     >
                         a custom location
@@ -79,13 +79,13 @@ const VencordLocationPicker: SettingsComponent = ({ settings }) => {
             <div className={cl("button-grid")}>
                 <Button
                     onClick={async () => {
-                        const choice = await VesktopNative.fileManager.selectVencordDir();
+                        const choice = await VegcordNative.fileManager.selectVencordDir();
                         switch (choice) {
                             case "cancelled":
                                 break;
                             case "ok":
                                 Toasts.show({
-                                    message: "Vencord install changed. Fully restart Vesktop to apply.",
+                                    message: "Vencord install changed. Fully restart Vegcord to apply.",
                                     id: Toasts.genId(),
                                     type: Toasts.Type.SUCCESS
                                 });
@@ -107,7 +107,7 @@ const VencordLocationPicker: SettingsComponent = ({ settings }) => {
                 <Button
                     variant="dangerPrimary"
                     onClick={async () => {
-                        await VesktopNative.fileManager.selectVencordDir(null);
+                        await VegcordNative.fileManager.selectVencordDir(null);
                         forceUpdate();
                     }}
                 >

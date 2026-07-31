@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -41,7 +41,7 @@ export async function resolveAssetPath(asset: UserAssetType) {
     return join(STATIC_DIR, DEFAULT_ASSETS[asset]);
 }
 
-export async function handleVesktopAssetsProtocol(path: string, req: Request) {
+export async function handleVegcordAssetsProtocol(path: string, req: Request) {
     const asset = path.slice(1);
 
     // @ts-expect-error dumb types

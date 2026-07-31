@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -24,7 +24,7 @@ import type { SettingsStore } from "shared/utils/SettingsStore";
 import { createAboutWindow } from "./about";
 import { initArRPC } from "./arrpc";
 import { CommandLine } from "./cli";
-import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, ICON_PATH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
 import { AppEvents } from "./events";
 import { sendRendererCommand } from "./ipcCommands";
 import { darwinURL } from "./main";
@@ -77,7 +77,7 @@ function initMenuBar(win: BrowserWindow) {
 
     const subMenu = [
         {
-            label: "About Vesktop",
+            label: "About Vegcord",
             click: createAboutWindow
         },
         {
@@ -87,14 +87,14 @@ function initMenuBar(win: BrowserWindow) {
                 app.relaunch();
                 app.quit();
             },
-            toolTip: "Vesktop will automatically restart after this operation"
+            toolTip: "Vegcord will automatically restart after this operation"
         },
         {
-            label: "Reset Vesktop",
+            label: "Reset Vegcord",
             async click() {
                 await clearData(win);
             },
-            toolTip: "Vesktop will automatically restart after this operation"
+            toolTip: "Vegcord will automatically restart after this operation"
         },
         {
             label: "Relaunch",
@@ -161,7 +161,7 @@ function initMenuBar(win: BrowserWindow) {
 
     const menuItems = [
         {
-            label: "Vesktop",
+            label: "Vegcord",
             role: "appMenu",
             submenu: subMenu.filter(isTruthy)
         },
@@ -270,7 +270,7 @@ function initStaticTitle(win: BrowserWindow) {
 
     addSettingsListener("staticTitle", enabled => {
         if (enabled) {
-            win.setTitle("Vesktop");
+            win.setTitle("Vegcord");
             win.on("page-title-updated", listener);
         } else {
             win.off("page-title-updated", listener);
@@ -324,6 +324,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
     const options: BrowserWindowConstructorOptions = {
         show: Settings.store.enableSplashScreen === false && !CommandLine.values["start-minimized"],
         backgroundColor,
+        icon: ICON_PATH,
         webPreferences: {
             nodeIntegration: false,
             sandbox: true,
@@ -354,7 +355,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
     }
 
     if (staticTitle) {
-        options.title = "Vesktop";
+        options.title = "Vegcord";
     }
 
     if (process.platform === "darwin") {
@@ -441,6 +442,7 @@ export async function createWindows() {
     const startMinimized = CommandLine.values["start-minimized"];
 
     let splash: BrowserWindow | undefined;
+    const splashCreatedAt = Date.now();
     if (Settings.store.enableSplashScreen !== false) {
         splash = createSplashWindow(startMinimized);
 
@@ -453,7 +455,12 @@ export async function createWindows() {
 
     mainWin = createMainWindow();
 
-    AppEvents.on("appLoaded", () => {
+    AppEvents.on("appLoaded", async () => {
+        // Keep splash visible for at least 2.5s so user can enjoy the animation
+        const elapsed = Date.now() - splashCreatedAt;
+        if (elapsed < 2500 && splash) {
+            await new Promise(r => setTimeout(r, 2500 - elapsed));
+        }
         splash?.destroy();
 
         if (!startMinimized) {

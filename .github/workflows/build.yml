@@ -1,0 +1,142 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '>=22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package AppImage
+        run: npx electron-builder --linux AppImage --${{ matrix.arch }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: vesktop-appimage-${{ matrix.arch }}
+          path: dist/*.AppImage
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '>=22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package Windows (ZIP)
+        run: npx electron-builder --win --${{ matrix.arch }} --config.win.target=zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package Windows (NSIS)
+        run: npx electron-builder --win --${{ matrix.arch }} --config.win.target=nsis
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vesktop-windows-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.exe
+
+  build-arch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Arch package
+        uses: actions/checkout@v4
+
+      - name: Install makepkg deps
+        run: |
+          sudo apt update
+          sudo apt install -y python3 python3-dnspython python3-requests nodejs pnpm
+          pnpm install
+          pnpm build
+          cp -r gfw_resist_HTTPS_proxy static/gfw_proxy
+
+      - name: Package
+        run: |
+          tar czf ../vesktop-gfw-proxy.tar.gz --transform='s/^/vesktop-gfw-proxy-1.6.5\//' .
+          cd ..
+          mkdir -p src
+          cp vesktop-gfw-proxy.tar.gz src/
+          cd Vesktop
+          # Simple packaging: zip the dist + static
+          mkdir -p dist/arch
+          cp -r dist/js static package.json LICENSE dist/arch/
+          cd dist/arch
+          tar czf ../vesktop-gfw-proxy-1.6.5-2-any.pkg.tar.gz .
+
+      - name: Upload Arch package
+        uses: actions/upload-artifact@v4
+        with:
+          name: vesktop-arch
+          path: dist/*.pkg.tar.gz
+
+  release:
+    needs: [build-linux, build-windows, build-arch]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vesktop-*
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.AppImage
+            *.zip
+            *.exe
+            *.pkg.tar.*
+          draft: false
+          prerelease: false
+          generate_release_notes: true

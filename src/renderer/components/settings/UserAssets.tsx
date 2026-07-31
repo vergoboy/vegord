@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2025 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -60,7 +60,7 @@ function Asset({ asset }: { asset: UserAssetType }) {
     const imageRendering = isSplash && settings.splashPixelated ? "pixelated" : "auto";
 
     const onChooseAsset = (value?: null) => async () => {
-        const res = await VesktopNative.fileManager.chooseUserAsset(asset, value);
+        const res = await VegcordNative.fileManager.chooseUserAsset(asset, value);
         if (res === "ok") {
             setVersion(Date.now());
             if (isSplash && value === null) {
@@ -79,7 +79,7 @@ function Asset({ asset }: { asset: UserAssetType }) {
             <div className="vcd-user-assets-asset">
                 <img
                     className="vcd-user-assets-image"
-                    src={`vesktop://assets/${asset}?v=${version}`}
+                    src={`vegord://assets/${asset}?v=${version}`}
                     alt=""
                     style={{ imageRendering }}
                 />

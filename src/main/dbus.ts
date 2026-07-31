@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -8,33 +8,33 @@ import { app } from "electron";
 import { join } from "path";
 import { STATIC_DIR } from "shared/paths";
 
-let libVesktop: typeof import("libvesktop") | null = null;
+let libVegcord: typeof import("libvegord") | null = null;
 
-function loadLibVesktop() {
+function loadLibVegcord() {
     try {
-        if (!libVesktop) {
-            libVesktop = require(join(STATIC_DIR, `dist/libvesktop-${process.arch}.node`));
+        if (!libVegcord) {
+            libVegcord = require(join(STATIC_DIR, `dist/libvegord-${process.arch}.node`));
         }
     } catch (e) {
-        console.error("Failed to load libvesktop:", e);
+        console.error("Failed to load libvegord:", e);
     }
 
-    return libVesktop;
+    return libVegcord;
 }
 
 export function getAccentColor() {
-    return loadLibVesktop()?.getAccentColor() ?? null;
+    return loadLibVegcord()?.getAccentColor() ?? null;
 }
 
 export function updateUnityLauncherCount(count: number) {
-    const libVesktop = loadLibVesktop();
-    if (!libVesktop) {
+    const libVegcord = loadLibVegcord();
+    if (!libVegcord) {
         return app.setBadgeCount(count);
     }
 
-    return libVesktop.updateUnityLauncherCount(count);
+    return libVegcord.updateUnityLauncherCount(count);
 }
 
 export function requestBackground(autoStart: boolean, commandLine: string[]) {
-    return loadLibVesktop()?.requestBackground(autoStart, commandLine) ?? false;
+    return loadLibVegcord()?.requestBackground(autoStart, commandLine) ?? false;
 }

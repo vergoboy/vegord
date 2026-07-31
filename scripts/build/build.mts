@@ -1,10 +1,11 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { BuildContext, BuildOptions, context } from "esbuild";
+import { execFileSync } from "child_process";
 import { copyFile, cp, mkdir, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
@@ -75,71 +76,90 @@ async function copyGfwProxy(srcDir: string, destDir: string) {
     );
 }
 
+async function buildRustProxy() {
+    const cargo = process.platform === "win32" ? "cargo.exe" : "cargo";
+    console.log("Building Rust GFW proxy (cargo build --release)...");
+    try {
+        execFileSync(cargo, ["build", "--release"], { cwd: "./gfw_proxy_rs", stdio: "inherit" });
+        return true;
+    } catch (err) {
+        console.warn("Failed to build Rust GFW proxy, falling back to prebuilt binary:", (err as Error).message);
+        return false;
+    }
+}
+
 async function copyGfwProxyWrapper() {
     const src = "./gfw_resist_HTTPS_proxy";
     const dest = "./static/gfw_proxy";
-    return copyGfwProxy(src, dest).catch(err =>
+    await copyGfwProxy(src, dest).catch(err =>
         console.warn("Failed to copy GFW proxy files:", err.message)
     );
+    await buildRustProxy();
+    const binName = process.platform === "win32" ? "gfw_proxy.exe" : "gfw_proxy";
+    const rustBin = join("gfw_proxy_rs", "target", "release", binName);
+    if (existsSync(rustBin)) {
+        await copyFile(rustBin, join(dest, binName));
+        console.log(`Copied compiled Rust gfw_proxy binary (${binName}) into static/gfw_proxy/`);
+    }
 }
 
-async function copyLibVesktop() {
+async function copyLibVegcord() {
     if (process.platform !== "linux") return;
 
     try {
         await copyFile(
-            "./packages/libvesktop/build/Release/vesktop.node",
-            `./static/dist/libvesktop-${process.arch}.node`
+            "./packages/libvegord/build/Release/vegord.node",
+            `./static/dist/libvegord-${process.arch}.node`
         );
-        console.log("Using local libvesktop build");
+        console.log("Using local libvegord build");
     } catch {
         console.log(
-            "Using prebuilt libvesktop binaries. Run `pnpm buildLibVesktop` and build again to build from source - see README.md for more details"
+            "Using prebuilt libvegord binaries. Run `pnpm buildLibVegcord` and build again to build from source - see README.md for more details"
         );
         return Promise.all([
-            copyFile("./packages/libvesktop/prebuilds/vesktop-x64.node", "./static/dist/libvesktop-x64.node"),
-            copyFile("./packages/libvesktop/prebuilds/vesktop-arm64.node", "./static/dist/libvesktop-arm64.node")
-        ]).catch(() => console.warn("Failed to copy libvesktop. Building without libvesktop support"));
+            copyFile("./packages/libvegord/prebuilds/vegord-x64.node", "./static/dist/libvegord-x64.node"),
+            copyFile("./packages/libvegord/prebuilds/vegord-arm64.node", "./static/dist/libvegord-arm64.node")
+        ]).catch(() => console.warn("Failed to copy libvegord. Building without libvegord support"));
     }
 }
 
 await Promise.all([
     copyVenmic(),
-    copyLibVesktop(),
+    copyLibVegcord(),
     copyGfwProxyWrapper(),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/index.ts"],
         outfile: "dist/js/main.js",
-        footer: { js: "//# sourceURL=VesktopMain" }
+        footer: { js: "//# sourceURL=VegcordMain" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/arrpc/worker.ts"],
         outfile: "dist/js/arRpcWorker.js",
-        footer: { js: "//# sourceURL=VesktopArRpcWorker" }
+        footer: { js: "//# sourceURL=VegcordArRpcWorker" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/index.ts"],
         outfile: "dist/js/preload.js",
-        footer: { js: "//# sourceURL=VesktopPreload" }
+        footer: { js: "//# sourceURL=VegcordPreload" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/splash.ts"],
         outfile: "dist/js/splashPreload.js",
-        footer: { js: "//# sourceURL=VesktopSplashPreload" }
+        footer: { js: "//# sourceURL=VegcordSplashPreload" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/updater.ts"],
         outfile: "dist/js/updaterPreload.js",
-        footer: { js: "//# sourceURL=VesktopUpdaterPreload" }
+        footer: { js: "//# sourceURL=VegcordUpdaterPreload" }
     }),
     createContext({
         ...CommonOpts,
-        globalName: "Vesktop",
+        globalName: "Vegcord",
         entryPoints: ["src/renderer/index.ts"],
         outfile: "dist/js/renderer.js",
         format: "iife",
@@ -148,7 +168,7 @@ await Promise.all([
         jsxFragment: "VencordFragment",
         external: ["@vencord/types/*"],
         plugins: [vencordDep, includeDirPlugin("patches", "src/renderer/patches")],
-        footer: { js: "//# sourceURL=VesktopRenderer" }
+        footer: { js: "//# sourceURL=VegcordRenderer" }
     })
 ]);
 

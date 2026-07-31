@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -8,9 +8,9 @@ export const enum IpcEvents {
     GET_VENCORD_PRELOAD_SCRIPT = "VCD_GET_VC_PRELOAD_SCRIPT",
     GET_VENCORD_RENDERER_SCRIPT = "VCD_GET_VC_RENDERER_SCRIPT",
 
-    GET_VESKTOP_RENDERER_SCRIPT = "VCD_GET_RENDERER_SCRIPT",
-    GET_VESKTOP_RENDERER_CSS = "VCD_GET_RENDERER_CSS",
-    VESKTOP_RENDERER_CSS_UPDATE = "VCD_PRELOAD_RENDERER_CSS_UPDATE",
+    GET_VEGCORD_RENDERER_SCRIPT = "VCD_GET_RENDERER_SCRIPT",
+    GET_VEGCORD_RENDERER_CSS = "VCD_GET_RENDERER_CSS",
+    VEGCORD_RENDERER_CSS_UPDATE = "VCD_PRELOAD_RENDERER_CSS_UPDATE",
 
     GET_VERSION = "VCD_GET_VERSION",
     SUPPORTS_WINDOWS_TRANSPARENCY = "VCD_SUPPORTS_WINDOWS_TRANSPARENCY",

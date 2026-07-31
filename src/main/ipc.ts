@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -42,16 +42,16 @@ handleSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT, () =>
     readFileSync(join(VENCORD_FILES_DIR, "vencordDesktopRenderer.js"), "utf-8")
 );
 
-const VESKTOP_RENDERER_JS_PATH = join(__dirname, "renderer.js");
-const VESKTOP_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
-handleSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT, () => readFileSync(VESKTOP_RENDERER_JS_PATH, "utf-8"));
-handle(IpcEvents.GET_VESKTOP_RENDERER_CSS, () => readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8"));
+const VEGCORD_RENDERER_JS_PATH = join(__dirname, "renderer.js");
+const VEGCORD_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
+handleSync(IpcEvents.GET_VEGCORD_RENDERER_SCRIPT, () => readFileSync(VEGCORD_RENDERER_JS_PATH, "utf-8"));
+handle(IpcEvents.GET_VEGCORD_RENDERER_CSS, () => readFile(VEGCORD_RENDERER_CSS_PATH, "utf-8"));
 
 if (IS_DEV) {
-    watch(VESKTOP_RENDERER_CSS_PATH, { persistent: false }, async () => {
+    watch(VEGCORD_RENDERER_CSS_PATH, { persistent: false }, async () => {
         mainWin?.webContents.postMessage(
-            IpcEvents.VESKTOP_RENDERER_CSS_UPDATE,
-            await readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8")
+            IpcEvents.VEGCORD_RENDERER_CSS_UPDATE,
+            await readFile(VEGCORD_RENDERER_CSS_PATH, "utf-8")
         );
     });
 }

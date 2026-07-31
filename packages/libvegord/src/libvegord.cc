@@ -47,13 +47,13 @@ bool update_launcher_count(int count)
     GError *error = nullptr;
 
     const char *chromeDesktop = std::getenv("CHROME_DESKTOP");
-    std::string desktop_id = std::string("application://") + (chromeDesktop ? chromeDesktop : "vesktop.desktop");
+    std::string desktop_id = std::string("application://") + (chromeDesktop ? chromeDesktop : "vegord.desktop");
 
     GObjectPtr<GDBusConnection> bus(g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error));
     if (!bus)
     {
         GErrorPtr error_ptr(error);
-        std::cerr << "[libvesktop::update_launcher_count] Failed to connect to session bus: "
+        std::cerr << "[libvegord::update_launcher_count] Failed to connect to session bus: "
                   << (error_ptr ? error_ptr->message : "unknown error") << std::endl;
         return false;
     }
@@ -75,7 +75,7 @@ bool update_launcher_count(int count)
     if (!result || error)
     {
         GErrorPtr error_ptr(error);
-        std::cerr << "[libvesktop::update_launcher_count] Failed to emit Update signal: "
+        std::cerr << "[libvegord::update_launcher_count] Failed to emit Update signal: "
                   << (error_ptr ? error_ptr->message : "unknown error") << std::endl;
         return false;
     }
@@ -91,7 +91,7 @@ std::optional<int32_t> get_accent_color()
     if (!bus)
     {
         GErrorPtr error_ptr(error);
-        std::cerr << "[libvesktop::get_accent_color] Failed to connect to session bus: "
+        std::cerr << "[libvegord::get_accent_color] Failed to connect to session bus: "
                   << (error_ptr ? error_ptr->message : "unknown error") << std::endl;
         return std::nullopt;
     }
@@ -112,7 +112,7 @@ std::optional<int32_t> get_accent_color()
     if (!reply)
     {
         GErrorPtr error_ptr(error);
-        std::cerr << "[libvesktop::get_accent_color] Failed to call Read: "
+        std::cerr << "[libvegord::get_accent_color] Failed to call Read: "
                   << (error_ptr ? error_ptr->message : "unknown error") << std::endl;
         return std::nullopt;
     }
@@ -121,7 +121,7 @@ std::optional<int32_t> get_accent_color()
     g_variant_get(reply.get(), "(v)", &inner_raw);
     if (!inner_raw)
     {
-        std::cerr << "[libvesktop::get_accent_color] Inner variant is null" << std::endl;
+        std::cerr << "[libvegord::get_accent_color] Inner variant is null" << std::endl;
         return std::nullopt;
     }
 
@@ -137,7 +137,7 @@ std::optional<int32_t> get_accent_color()
     if (!g_variant_is_of_type(inner.get(), G_VARIANT_TYPE_TUPLE) ||
         g_variant_n_children(inner.get()) < 3)
     {
-        std::cerr << "[libvesktop::get_accent_color] Inner variant is not a tuple of 3 doubles" << std::endl;
+        std::cerr << "[libvegord::get_accent_color] Inner variant is not a tuple of 3 doubles" << std::endl;
         return std::nullopt;
     }
 
@@ -171,7 +171,7 @@ bool request_background(bool autostart, const std::vector<std::string> &commandl
     if (!bus)
     {
         GErrorPtr error_ptr(error);
-        std::cerr << "[libvesktop::request_background] Failed to connect to session bus: "
+        std::cerr << "[libvegord::request_background] Failed to connect to session bus: "
                   << (error_ptr ? error_ptr->message : "unknown error") << std::endl;
         return false;
     }
@@ -205,7 +205,7 @@ bool request_background(bool autostart, const std::vector<std::string> &commandl
     if (!reply)
     {
         GErrorPtr error_ptr(error);
-        std::cerr << "[libvesktop::request_background] Failed to call RequestBackground: "
+        std::cerr << "[libvegord::request_background] Failed to call RequestBackground: "
                   << (error_ptr ? error_ptr->message : "unknown error") << std::endl;
         return false;
     }
@@ -266,4 +266,4 @@ Napi::Object Init(Napi::Env env, Napi::Object exports)
     return exports;
 }
 
-NODE_API_MODULE(libvesktop, Init)
+NODE_API_MODULE(libvegord, Init)

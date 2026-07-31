@@ -1,15 +1,21 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { BrowserWindow } from "electron";
+import { BrowserWindow, ipcMain, nativeImage, shell } from "electron";
+import { existsSync } from "fs";
 import { join } from "path";
 import { SplashProps } from "shared/browserWinProperties";
 
+import { ICON_PATH } from "./constants";
 import { Settings } from "./settings";
-import { loadView } from "./vesktopStatic";
+import { loadView } from "./vegordStatic";
+
+ipcMain.on("open-external", (_event, url: string) => {
+    shell.openExternal(url).catch((err: Error) => console.error("Failed to open URL:", err));
+});
 
 let splash: BrowserWindow | undefined;
 
@@ -17,10 +23,16 @@ export function createSplashWindow(startMinimized = false) {
     splash = new BrowserWindow({
         ...SplashProps,
         show: !startMinimized,
+        transparent: true,
+        backgroundColor: "#00000000",
         webPreferences: {
             preload: join(__dirname, "splashPreload.js")
         }
     });
+
+    if (existsSync(ICON_PATH)) {
+        splash.setIcon(nativeImage.createFromPath(ICON_PATH));
+    }
 
     loadView(splash, "splash.html");
 

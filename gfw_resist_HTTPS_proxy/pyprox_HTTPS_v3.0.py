@@ -251,6 +251,10 @@ discord_best_rtt = None
 discord_lock = threading.Lock()
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = os.environ.get('VEGORD_PROXY_DATA_DIR', str(BASE_DIR))
+
+_socks_targets = {}
+_socks_targets_lock = threading.Lock()
 
 
 def now_iso():
@@ -269,7 +273,7 @@ class DNS_over_Fragment:
             'https': f'http://127.0.0.1:{CONFIG["listen_PORT"]}'
         }
         self.lock = threading.Lock()
-        self.doh_log_path = os.path.join(BASE_DIR, 'DoH_switch_log.txt')
+        self.doh_log_path = os.path.join(DATA_DIR, 'DoH_switch_log.txt')
         self.blacklist = {}
 
     def _get_current_url(self):
@@ -429,7 +433,8 @@ class ThreadedServer:
             client.close()
             return
 
-        host, port = getattr(client, '_target', ('?', 0))
+        with _socks_targets_lock:
+            host, port = _socks_targets.pop(id(client), ('?', 0))
         is_voice = _is_voice_port(port) or _is_discord_voice(host)
 
         ip = backend.getpeername()[0]
@@ -498,7 +503,8 @@ class ThreadedServer:
             host, port = data.split(b' ')[1].split(b':')
             host = host.decode()
             port = int(port)
-            client._target = (host, port)
+            with _socks_targets_lock:
+                _socks_targets[id(client)] = (host, port)
             log_console('CONNECT', f'{host}:{port}')
             sock = self._connect(host, port, client)
             if sock and not isinstance(sock, str):
@@ -555,7 +561,8 @@ class ThreadedServer:
         except Exception:
             return None
 
-        client._target = (host, port)
+        with _socks_targets_lock:
+            _socks_targets[id(client)] = (host, port)
         log_console('SOCKS5', f'{host}:{port}')
         sock = self._connect(host, port, client)
         if sock and not isinstance(sock, str):
@@ -741,7 +748,7 @@ def _build_stats():
 
 
 def _log_writer():
-    path = os.path.join(BASE_DIR, 'DNS_IP_traffic_info.txt')
+    path = os.path.join(DATA_DIR, 'DNS_IP_traffic_info.txt')
     with open(path, 'w') as f:
         while True:
             time.sleep(CONFIG['log_every_N_sec'])

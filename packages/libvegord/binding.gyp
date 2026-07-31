@@ -1,8 +1,8 @@
 {
   "targets": [
     {
-      "target_name": "libvesktop",
-      "sources": [ "src/libvesktop.cc" ],
+      "target_name": "libvegord",
+      "sources": [ "src/libvegord.cc" ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],

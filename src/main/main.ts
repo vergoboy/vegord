@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -8,7 +8,7 @@ import "./cli";
 import "./updater";
 import "./ipc";
 import "./userAssets";
-import "./vesktopProtocol";
+import "./vegordProtocol";
 
 import { app, BrowserWindow, nativeTheme } from "electron";
 
@@ -22,7 +22,7 @@ import { Settings, State } from "./settings";
 import { setAsDefaultProtocolClient } from "./utils/setAsDefaultProtocolClient";
 import { isDeckGameMode } from "./utils/steamOS";
 
-console.log("Vesktop v" + app.getVersion());
+console.log("Vegcord v" + app.getVersion());
 
 // Make the Vencord files use our DATA_DIR
 process.env.VENCORD_USER_DATA_DIR = DATA_DIR;
@@ -139,7 +139,14 @@ function init() {
     });
 
     app.whenReady().then(async () => {
-        if (process.platform === "win32") app.setAppUserModelId("dev.vencord.vesktop");
+        if (process.platform === "win32") app.setAppUserModelId("dev.vencord.vegord");
+        if (process.platform === "linux") {
+            try { app.setAppUserModelId("vegord"); } catch {}
+
+            // Match the .desktop file's StartupWMClass so the taskbar/titlebar
+            // shows the Vegcord icon instead of Electron's default one
+            try { app.setDesktopName("vegord-gfw.desktop"); } catch {}
+        }
 
         registerScreenShareHandler();
         registerMediaPermissionsHandler();
@@ -154,10 +161,10 @@ function init() {
 
 if (!app.requestSingleInstanceLock({ IS_DEV })) {
     if (IS_DEV) {
-        console.log("Vesktop is already running. Quitting previous instance...");
+        console.log("Vegcord is already running. Quitting previous instance...");
         init();
     } else {
-        console.log("Vesktop is already running. Quitting...");
+        console.log("Vegcord is already running. Quitting...");
         app.quit();
     }
 } else {
@@ -189,7 +196,7 @@ app.on("before-quit", stopProxy);
 
 // Sets the WebRTC IP handling policy for all current and future windows.
 // Switching to "default_public_and_private_interfaces" may fix calls stuck at "DTLS Connecting" when using VPNs, Tailscale, etc.
-// https://github.com/Vencord/Vesktop/issues/876
+// https://github.com/Vencord/Vegcord/issues/876
 app.on("web-contents-created", (_event, contents) => {
     contents.setWebRTCIPHandlingPolicy(Settings.store.webRTCIPHandlingPolicy ?? "default");
 });

@@ -1,66 +1,88 @@
-# Vesktop GFW Proxy
+# Vegord
 
-Fork of [Vesktop](https://github.com/Vencord/Vesktop) with a built-in GFW-resistant SOCKS5 proxy for regions where Discord is throttled or blocked.
+A custom Discord desktop app with a **built-in GFW-resistant proxy** for regions where Discord is throttled or blocked.
+
+Fork of [Vesktop](https://github.com/Vencord/Vesktop) with Vencord preinstalled plus a high-performance Rust SOCKS5/HTTP proxy (with a Python fallback) that tunnels Discord traffic past Deep Packet Inspection and DNS poisoning.
 
 ## Features
 
 - **Everything from upstream Vesktop**: Vencord preinstalled, lightweight, Linux screenshare with sound & Wayland
-- **Built-in GFW-resistant proxy**: SOCKS5 proxy (`127.0.0.1:4500`) with DNS-over-HTTPS (DoH), TCP fragmentation, and smart Discord IP routing
-- **Auto-starts** with Vesktop on Linux (use `--no-proxy` to disable)
-- **Voice-optimized**: Longer timeouts for voice/TURN connections, WebRTC forced through proxy
-- **No conflict** with original Vesktop — installs as `vesktop-gfw`
+- **Built-in GFW-resistant proxy**: high-performance Rust proxy (`gfw_proxy_rs`) exposing SOCKS5 on `127.0.0.1:4500`, with a Python fallback (`pyprox_HTTPS_v3.0.py`)
+- **DNS-over-HTTPS (DoH)**: resolves via 37+ DoH servers (Cloudflare, Google, Quad9, ...) to bypass DNS poisoning
+- **TCP fragmentation**: splits the TLS ClientHello into fragments to evade DPI
+- **Smart Discord IP routing**: pings discovered Discord IPs and routes to the fastest one, with an offline DNS cache as fallback
+- **Voice-optimized**: longer timeouts for voice/TURN connections, WebRTC forced through the proxy
+- **Auto-starts** on launch (use `--no-proxy` to disable)
+- **No conflict** with upstream Vesktop — separate app/executable names
 
 ## Installation
+
+### Windows
+
+Grab the latest NSIS installer (`Vegcord Setup <version>.exe`) from the [Releases](https://github.com/vergoboy/vegord/releases) page, or the portable ZIP (`Vegcord-<version>-win.zip` for x64, `-arm64-win.zip` for ARM64).
 
 ### Arch Linux
 
 ```sh
-# From the project directory:
-makepkg -si
-
-# Or install pre-built package:
-sudo pacman -U vesktop-gfw-proxy-*.pkg.tar.zst
+sudo pacman -U vegord-gfw-proxy-*.pkg.tar.zst
+# Run with: vegord (proxy on by default), vegord-gfw, or vegord-gfw-proxy
 ```
 
 ### AppImage
 
+Download from Releases, or build it yourself:
+
 ```sh
-# Build with electron-builder:
 pnpm package --linux AppImage
-# Or download from Releases
-```
-
-### Windows
-
-```sh
-pnpm package --win
-# Output in dist/ as NSIS installer or ZIP
 ```
 
 ### Build from Source
 
 ```sh
-git clone https://github.com/Vencord/Vesktop
-cd Vesktop
+git clone https://github.com/vergoboy/vegord
+cd vegord
 pnpm install
 pnpm build
 # Run without packaging:
 electron .
-# Or package:
+# Or package for the current platform:
 pnpm package
 ```
+
+#### Cross-compiling for Windows on Linux
+
+The NSIS/ZIP Windows targets can be built on Linux. You need:
+
+```sh
+sudo pacman -S mingw-w64-gcc   # or your distro's mingw-w64-gcc
+rustup target add x86_64-pc-windows-gnu
+# wine is required for electron-builder to stamp the executable (icon/version)
+```
+
+Then:
+
+```sh
+pnpm build
+# Build the Windows gfw_proxy.exe into static/gfw_proxy/:
+cargo build --release --target x86_64-pc-windows-gnu --manifest-path gfw_proxy_rs/Cargo.toml
+cp gfw_proxy_rs/target/x86_64-pc-windows-gnu/release/gfw_proxy.exe static/gfw_proxy/
+# Package:
+npx electron-builder --win
+```
+
+Outputs land in `dist/` (`Vegcord Setup <version>.exe`, `Vegcord-<version>-win.zip`, ...).
 
 ## Usage
 
 ```sh
-# Run with proxy (default):
-vesktop-gfw
+# Run with the built-in proxy (default):
+vegord
 
-# Run without proxy (uses original Vesktop behavior):
-vesktop-gfw --no-proxy
+# Run without the proxy (plain Vesktop behavior):
+vegord --no-proxy
 
 # Use a custom proxy instead of the built-in one:
-vesktop-gfw --proxy-server="http://127.0.0.1:8080"
+vegord --proxy-server="http://127.0.0.1:8080"
 ```
 
 ### Command-Line Flags
@@ -75,17 +97,17 @@ vesktop-gfw --proxy-server="http://127.0.0.1:8080"
 
 ## How the Proxy Works
 
-The proxy (`pyprox_HTTPS_v3.0.py`) runs as a background Python process:
+On startup the app spawns the Rust binary `gfw_proxy` (`gfw_proxy.exe` on Windows) from `static/gfw_proxy/`. If the Rust binary is unavailable it falls back to the Python script `pyprox_HTTPS_v3.0.py`.
 
 1. **SOCKS5 on `127.0.0.1:4500`** — Electron routes all Discord traffic through it
-2. **DNS-over-HTTPS (DoH)** — Resolves domains via 37+ DoH servers (Cloudflare, Google, Quad9, etc.) to bypass DNS poisoning
-3. **TCP fragmentation** — Splits initial TLS handshake data into fragments to evade DPI (Deep Packet Inspection)
-4. **Smart Discord routing** — Pings discovered Discord IPs and routes to the fastest one
-5. **Offline DNS cache** — Hardcoded IPs for Twitter, Instagram, WhatsApp, YouTube, Facebook, Google as fallback
+2. **DNS-over-HTTPS (DoH)** — bypasses DNS poisoning via racing DoH servers
+3. **TCP fragmentation** — splits the initial TLS handshake into fragments to evade DPI
+4. **Smart Discord routing** — routes to the fastest discovered Discord IP
+5. **Offline DNS cache** — hardcoded IPs for Twitter, Instagram, WhatsApp, YouTube, Facebook, Google as fallback
 
 ### Configuration
 
-Edit `gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py`:
+The Rust proxy is configured via CLI flags (`--port`, `--data-dir`) in `src/main/gfwProxy.ts`. For the Python fallback, edit `gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py`:
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
@@ -101,16 +123,14 @@ Edit `gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py`:
 
 If voice channels fail or have high ping:
 
-1. **Check logs**: Run from terminal and look for `[VOICE]` tags
-2. **WebRTC internals**: Open `chrome://webrtc-internals` in Vesktop (from Vencord dev tools)
-3. **Try without proxy**: `vesktop-gfw --no-proxy` to isolate if proxy is the issue
+1. **Check logs**: Run from terminal and look for `[GFW Proxy]` and `[VOICE]` tags
+2. **WebRTC internals**: Open `chrome://webrtc-internals` in the app (from Vencord dev tools)
+3. **Try without proxy**: `vegord --no-proxy` to isolate if the proxy is the issue
 4. **Adjust WebRTC policy**: Settings → WebRTC IP Handling Policy → `disable_non_proxied_udp` (default when proxy is active)
-5. **Socket timeout**: If voice connects but drops after ~60s, increase `voice_socket_timeout` in the config
-6. **Discord IP routing**: The proxy automatically finds the best Discord IP. Watch for `[DISCORD]` log entries showing best IP updates.
+5. **Socket timeout**: If voice connects but drops after ~60s, increase `voice_socket_timeout`
+6. **Discord IP routing**: The proxy automatically finds the best Discord IP. Watch for `[DISCORD]` log entries showing best IP updates
 
-### Voice Logs
-
-The proxy logs voice-specific events with these tags:
+### Voice Log Tags
 
 - `[VOICE] Connecting...` — Voice/TURN connection attempt
 - `[VOICE] Connected in Xms` — Successful voice connection with latency
@@ -130,38 +150,19 @@ The proxy logs voice-specific events with these tags:
 ## Architecture
 
 ```
-Vesktop (Electron)
-  ├── main.ts
+Vegord (Electron)
+  ├── src/main
+  │   ├── gfwProxy.ts      ← Proxy lifecycle (start/stop, spawns Rust binary)
   │   ├── cli.ts           ← CLI flag parsing
-  │   ├── gfwProxy.ts      ← Proxy lifecycle (start/stop/getAddress)
   │   ├── mainWindow.ts    ← BrowserWindow creation
   │   └── ...
-  ├── pyprox_HTTPS_v3.0.py ← SOCKS5 proxy process
-  │   ├── DNS_over_Fragment ← DoH query engine
-  │   ├── ThreadedServer   ← SOCKS5/HTTP proxy server
-  │   ├── Discord pinger   ← Best IP discovery
-  │   └── Log writer       ← Traffic stats & health
-  ├── static/gfw_proxy/    ← Proxy files (copied during build)
+  ├── gfw_proxy_rs/        ← High-performance Rust proxy (SOCKS5/HTTP + DoH + fragment)
+  ├── gfw_resist_HTTPS_proxy/
+  │   └── pyprox_HTTPS_v3.0.py ← Python fallback proxy
+  ├── static/gfw_proxy/    ← Proxy files (copied during build, gitignored)
+  ├── packages/libvegord/  ← Native addon (screenshare/venmic)
   └── PKGBUILD             ← Arch Linux package definition
 ```
-
-## Building Packages
-
-```sh
-# Arch Linux
-makepkg -si
-
-# AppImage
-pnpm package --linux AppImage
-
-# Windows (requires wine + cross-compilation deps)
-pnpm package --win
-
-# All Linux targets
-pnpm package --linux
-```
-
-Output appears in the `dist/` directory.
 
 ## Development
 
@@ -177,10 +178,8 @@ pnpm testTypes         # TypeScript type check
 
 ### Proxy Development
 
-The proxy script is at `gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py`. During build, it's copied to `static/gfw_proxy/`. For rapid testing:
-
 ```sh
-# Run the proxy standalone:
+# Run the Python proxy standalone:
 python3 gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py
 
 # In another terminal, test with curl:

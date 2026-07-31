@@ -13,3 +13,41 @@ gfw_resist_HTTPS_proxy/DoH_switch_log.txt
 gfw_resist_HTTPS_proxy/Android/
 gfw_resist_HTTPS_proxy/asset/
 gfw_resist_HTTPS_proxy/__pycache__/
+
+# Logs
+chatlog.log
+*.log
+
+# Stray built binaries
+/gfw_proxy.exe
+/gfw_resist_HTTPS_proxy/gfw_proxy
+
+# Rust build artifacts
+gfw_proxy_rs/target/
+
+# Nested git repositories / leftover copies
+/vesktop-gfw-proxy/
+
+# Nested source copies (kept on disk, not part of the project)
+/src/src/
+/src/Vesktop-1.6.5/
+/src/vesktop-gfw-proxy/
+/src/gfw_resist_HTTPS_proxy/
+/src/build/
+/src/static/
+/src/scripts/
+/src/patches/
+/src/packages/
+/src/.github/
+/src/.vscode/
+/src/.env.example
+/src/.gitignore
+/src/.prettierrc.yaml
+/src/build-arch.sh
+/src/PKGBUILD
+/src/README.md
+/src/package.json
+/src/pnpm-workspace.yaml
+/src/eslint.config.mjs
+/src/LICENSE
+/src/chatlog.log

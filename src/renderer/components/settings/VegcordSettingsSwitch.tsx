@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -9,6 +9,6 @@ import type { ComponentProps } from "react";
 
 import { cl } from "./Settings";
 
-export function VesktopSettingsSwitch(props: ComponentProps<typeof FormSwitch>) {
+export function VegcordSettingsSwitch(props: ComponentProps<typeof FormSwitch>) {
     return <FormSwitch {...props} hideBorder className={cl("switch")} />;
 }

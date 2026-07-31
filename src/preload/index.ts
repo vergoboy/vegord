@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -7,9 +7,14 @@
 import { contextBridge, ipcRenderer, webFrame } from "electron/renderer";
 
 import { IpcEvents } from "../shared/IpcEvents";
-import { VesktopNative } from "./VesktopNative";
+import { VegcordNative } from "./VegcordNative";
 
-contextBridge.exposeInMainWorld("VesktopNative", VesktopNative);
+contextBridge.exposeInMainWorld("VegcordNative", VegcordNative);
+
+// Backwards-compatible alias: Vencord's injected renderer bundle still references
+// the legacy "VesktopNative" name. Without it, Vencord crashes during Discord's
+// app boot and the Discord webapp never initializes properly.
+contextBridge.exposeInMainWorld("VesktopNative", VegcordNative);
 
 // While sandboxed, Electron "polyfills" these APIs as local variables.
 // We have to pass them as arguments as they are not global
@@ -23,4 +28,4 @@ Function(
 )(require, Buffer, process, clearImmediate, setImmediate);
 
 webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT));
-webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT));
+webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VEGCORD_RENDERER_SCRIPT));

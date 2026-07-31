@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2025 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -14,10 +14,10 @@ type IpcCommandHandler = (data: any) => any;
 const handlers = new Map<string, IpcCommandHandler>();
 
 function respond(nonce: string, ok: boolean, data: any) {
-    VesktopNative.commands.respond({ nonce, ok, data });
+    VegcordNative.commands.respond({ nonce, ok, data });
 }
 
-VesktopNative.commands.onCommand(async ({ message, nonce, data }) => {
+VegcordNative.commands.onCommand(async ({ message, nonce, data }) => {
     const handler = handlers.get(message);
     if (!handler) {
         return respond(nonce, false, `No handler for message: ${message}`);

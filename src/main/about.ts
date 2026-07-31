@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -7,7 +7,7 @@
 import { app, BrowserWindow } from "electron";
 
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
-import { loadView } from "./vesktopStatic";
+import { loadView } from "./vegordStatic";
 
 export async function createAboutWindow() {
     const height = 750;

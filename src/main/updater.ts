@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Vegcord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and Vegcord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -13,7 +13,7 @@ import { Millis } from "shared/utils/millis";
 import { State } from "./settings";
 import { handle } from "./utils/ipcWrappers";
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
-import { loadView } from "./vesktopStatic";
+import { loadView } from "./vegordStatic";
 
 let updaterWindow: BrowserWindow | null = null;
 
@@ -44,7 +44,7 @@ handle(IpcEvents.UPDATER_OPEN, async () => {
 
 function openUpdater(update: UpdateInfo) {
     updaterWindow = new BrowserWindow({
-        title: "Vesktop Updater",
+        title: "Vegcord Updater",
         autoHideMenuBar: true,
         webPreferences: {
             preload: join(__dirname, "updaterPreload.js")
