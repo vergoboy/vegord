@@ -5,7 +5,7 @@ set -e
 
 pkgname=vegord-gfw-proxy
 pkgver=1.6.6
-pkgrel=2
+pkgrel=4
 pkgdir="/tmp/${pkgname}-pkg"
 srcdir="$(cd "$(dirname "$0")" && pwd)"
 

@@ -4,7 +4,7 @@
 
 pkgname=vegord-gfw-proxy
 pkgver=1.6.6
-pkgrel=2
+pkgrel=4
 pkgdesc="Vegcord - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/vergoboy/Vegcord"

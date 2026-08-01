@@ -79,8 +79,6 @@ export async function copyBundledVencordFiles() {
 }
 
 export async function ensureVencordFiles(force = false) {
-    if (!force && (await isValidVencordInstall(VENCORD_FILES_DIR))) return;
-
     mkdirSync(VENCORD_FILES_DIR, { recursive: true });
 
     if (!(await copyBundledVencordFiles())) {
