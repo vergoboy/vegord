@@ -22,11 +22,15 @@ import { once } from "shared/utils/once";
 import type { SettingsStore } from "shared/utils/SettingsStore";
 
 import { createAboutWindow } from "./about";
+import { bindAnnouncementsToWindow } from "./announcements";
 import { initArRPC } from "./arrpc";
 import { CommandLine } from "./cli";
+import { logError, logInfo, logWarn } from "./connectionLog";
 import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, ICON_PATH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+import { logProxyStatus, requestProxyRescan } from "./dohControl";
 import { AppEvents } from "./events";
 import { sendRendererCommand } from "./ipcCommands";
+import { themeDiscordLoadingScreen } from "./loadingScreen";
 import { darwinURL } from "./main";
 import { Settings, State, VencordSettings } from "./settings";
 import { createSplashWindow, updateSplashMessage } from "./splash";
@@ -424,9 +428,12 @@ export function loadUrl(uri: string | undefined) {
     const branch = Settings.store.discordBranch;
     const subdomain = branch === "canary" || branch === "ptb" ? `${branch}.` : "";
 
+    const url = `https://${subdomain}discord.com/${uri ? new URL(uri).pathname.slice(1) || "app" : "app"}`;
+    logInfo(`discord_load ${url}`);
+
     // we do not rely on 'did-finish-load' because it fires even if loadURL fails which triggers early detruction of the splash
     mainWin
-        .loadURL(`https://${subdomain}discord.com/${uri ? new URL(uri).pathname.slice(1) || "app" : "app"}`)
+        .loadURL(url)
         .then(() => AppEvents.emit("appLoaded"))
         .catch(error => retryUrl(error.url, error.code));
 }
@@ -434,6 +441,10 @@ export function loadUrl(uri: string | undefined) {
 const retryDelay = 1000;
 function retryUrl(url: string, description: string) {
     console.log(`retrying in ${retryDelay}ms`);
+    logWarn(`discord_load_retry ${description}`);
+    // Discord failed to load — force the proxy to re-scan DoH servers in case
+    // the active one got unstable/poisoned.
+    requestProxyRescan();
     updateSplashMessage(`Failed to load Discord: ${description}`);
     setTimeout(() => loadUrl(url), retryDelay);
 }
@@ -455,6 +466,9 @@ export async function createWindows() {
 
     mainWin = createMainWindow();
 
+    bindAnnouncementsToWindow(mainWin);
+    themeDiscordLoadingScreen(mainWin);
+
     AppEvents.on("appLoaded", async () => {
         // Keep splash visible for at least 2.5s so user can enjoy the animation
         const elapsed = Date.now() - splashCreatedAt;
@@ -475,6 +489,9 @@ export async function createWindows() {
             askToApplySteamLayout(mainWin);
         }
 
+        logInfo("discord_connected");
+        logProxyStatus("app_loaded");
+
         mainWin.once("show", () => {
             if (State.store.maximized && !mainWin!.isMaximized() && !isDeckGameMode) {
                 mainWin!.maximize();
@@ -488,10 +505,14 @@ export async function createWindows() {
         // check url to ensure app doesn't loop
         if (responseCode >= 300 && new URL(url).pathname !== `/app`) {
             loadUrl(undefined);
+            logWarn(`bad_page_response code=${responseCode}`);
             console.warn(`'did-navigate': Caught bad page response: ${responseCode}, redirecting to main app`);
         }
     });
 
-    mainWin.webContents.on("render-process-gone", (event, details) => console.log(details));
+    mainWin.webContents.on("render-process-gone", (event, details) => {
+        logError(`renderer_gone reason=${details.reason} exitCode=${details.exitCode}`);
+        console.log(details);
+    });
     initArRPC();
 }

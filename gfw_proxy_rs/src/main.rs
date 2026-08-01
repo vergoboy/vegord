@@ -1,4 +1,5 @@
 mod config;
+mod control;
 mod discord;
 mod doh;
 mod fragment;
@@ -8,12 +9,14 @@ mod stats;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use config::Config;
 use discord::DiscordManager;
 use doh::DohClient;
 use proxy::ProxyServer;
 use stats::StatsManager;
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -27,6 +30,13 @@ async fn main() -> std::io::Result<()> {
         if let Ok(p) = port_str.parse::<u16>() {
             config.listen_port = p;
         }
+    }
+    if let Ok(port_str) = env::var("VEGORD_PROXY_CONTROL_PORT") {
+        if let Ok(p) = port_str.parse::<u16>() {
+            config.control_port = p;
+        }
+    } else {
+        config.control_port = config.listen_port + 1;
     }
 
     // CLI argument parsing
@@ -83,6 +93,31 @@ async fn main() -> std::io::Result<()> {
     // Start background traffic & health log writer task
     stats_mgr.clone().start_log_writer();
 
+    // Bind the proxy listener BEFORE spawning dependent tasks so the startup
+    // DoH probe can route through the proxy immediately.
+    let bind_addr = format!("0.0.0.0:{}", config.listen_port);
+    let listener = TcpListener::bind(&bind_addr).await?;
+    println!(
+        "[{}] [START] Rust GFW Proxy Listening on {}",
+        stats::now_iso(),
+        bind_addr
+    );
+
+    // Startup DoH probe: scan all candidates, rank by measured RTT and select
+    // the most stable lowest-ping server as the active one.
+    let doh_probe = Arc::clone(&doh_client);
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        doh_probe.probe_and_select().await;
+    });
+
+    // Localhost control API for the Electron main process.
+    tokio::spawn(control::run_control_server(
+        Arc::clone(&doh_client),
+        Arc::clone(&discord_mgr),
+        config.control_port,
+    ));
+
     // Start proxy server
     let proxy_server = ProxyServer::new(
         config,
@@ -91,5 +126,5 @@ async fn main() -> std::io::Result<()> {
         stats_mgr,
     );
 
-    proxy_server.run().await
+    proxy_server.run(listener).await
 }

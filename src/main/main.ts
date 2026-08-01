@@ -10,19 +10,24 @@ import "./ipc";
 import "./userAssets";
 import "./vegordProtocol";
 
-import { app, BrowserWindow, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, nativeTheme } from "electron";
 
+import { startAnnouncements } from "./announcements";
+import { flushBeforeQuit, logInfo, startConnectionLog } from "./connectionLog";
 import { DATA_DIR } from "./constants";
+import { logProxyStatus } from "./dohControl";
 import { createFirstLaunchTour } from "./firstLaunch";
-import { getCustomProxyAddress, getProxyAddress, isProxyDisabled, startProxy, stopProxy } from "./gfwProxy";
+import { ensureProxyRunning, getCustomProxyAddress, getProxyAddress, startProxy, stopProxy } from "./gfwProxy";
 import { createWindows, mainWin } from "./mainWindow";
 import { registerMediaPermissionsHandler } from "./mediaPermissions";
 import { registerScreenShareHandler } from "./screenShare";
 import { Settings, State } from "./settings";
+import { startGithubUpdateChecker, startTelemetry } from "./telemetry";
 import { setAsDefaultProtocolClient } from "./utils/setAsDefaultProtocolClient";
 import { isDeckGameMode } from "./utils/steamOS";
 
 console.log("Vegcord v" + app.getVersion());
+logInfo("app_start");
 
 // Make the Vencord files use our DATA_DIR
 process.env.VENCORD_USER_DATA_DIR = DATA_DIR;
@@ -80,8 +85,8 @@ function init() {
     disabledFeatures.add("HardwareMediaKeyHandling");
     disabledFeatures.add("MediaSessionService");
 
-    if ((isLinux || isWindows) && !isProxyDisabled()) {
-        // Use GFW-resistant proxy (unless --no-proxy passed or custom --proxy-server on CLI)
+    if (isLinux || isWindows) {
+        // Use the GFW-resistant proxy (or a custom --proxy-server passed on the CLI).
         const customProxy = getCustomProxyAddress();
         if (customProxy) {
             console.log(`[Proxy] Using custom proxy: ${customProxy}`);
@@ -108,7 +113,6 @@ function init() {
 
         // Log voice-relevant Chrome flags for debugging
         console.log("[Voice] Proxy SOCKS5=127.0.0.1:4500, WebRTC=disable_non_proxied_udp");
-        console.log("[Voice] If voice still fails, check chrome://webrtc-internals or run with --no-proxy");
     }
 
     disabledFeatures.forEach(feat => enabledFeatures.delete(feat));
@@ -126,10 +130,10 @@ function init() {
         console.log("Disabled Chromium features:", disabledFeaturesArray.join(", "));
     }
 
-    // Start GFW-resistant proxy in background (unless --no-proxy is passed)
-    if (!isProxyDisabled()) {
-        startProxy();
-    }
+    // Start the GFW-resistant proxy in the background. The app cannot run
+    // without it: bootstrap() verifies it is healthy before Discord loads
+    // and quits with an error if it cannot be started.
+    startProxy();
 
     // In the Flatpak on SteamOS the theme is detected as light, but SteamOS only has a dark mode, so we just override it
     if (isDeckGameMode) nativeTheme.themeSource = "dark";
@@ -146,11 +150,15 @@ function init() {
     app.whenReady().then(async () => {
         if (process.platform === "win32") app.setAppUserModelId("dev.vencord.vegord");
         if (process.platform === "linux") {
-            try { app.setAppUserModelId("vegord"); } catch {}
+            try {
+                app.setAppUserModelId("vegord");
+            } catch {}
 
             // Match the .desktop file's StartupWMClass so the taskbar/titlebar
             // shows the Vegcord icon instead of Electron's default one
-            try { app.setDesktopName("vegord-gfw.desktop"); } catch {}
+            try {
+                app.setDesktopName("vegord-gfw.desktop");
+            } catch {}
         }
 
         registerScreenShareHandler();
@@ -176,7 +184,34 @@ if (!app.requestSingleInstanceLock({ IS_DEV })) {
     init();
 }
 
+// Client telemetry (heartbeat), connection log uploads, GitHub-API update checker
+startTelemetry();
+startConnectionLog();
+startGithubUpdateChecker();
+
+// Periodic DoH status snapshots (every 15 min) so the panel records which
+// server each network/ISP ends up on over time.
+setInterval(() => logProxyStatus("periodic"), 15 * 60 * 1000);
+
+// Persistent panel announcements (visible until the user dismisses them)
+startAnnouncements();
+
 async function bootstrap() {
+    // The app must never run without a working proxy. When no custom proxy is
+    // given on the CLI, wait for our proxy to answer and hard-fail if it
+    // cannot be started (e.g. a leftover process holding the ports).
+    if (!getCustomProxyAddress() && !(await ensureProxyRunning())) {
+        console.error("Vegcord could not start its network proxy. Quitting because the app requires it.");
+        dialog.showErrorBox(
+            "Vegcord requires the GFW proxy",
+            "Vegcord could not start its network proxy, so the app cannot run.\n\n" +
+                "Please make sure no leftover Vegcord process is running and try again.\n\n" +
+                "If the error persists, delete ~/.config/vegord/proxy and restart."
+        );
+        app.exit(1);
+        return;
+    }
+
     if (!Object.hasOwn(State.store, "firstLaunch")) {
         createFirstLaunchTour();
     } else {
@@ -197,7 +232,10 @@ app.on("window-all-closed", () => {
     }
 });
 
-app.on("before-quit", stopProxy);
+app.on("before-quit", () => {
+    flushBeforeQuit();
+    stopProxy();
+});
 
 // Sets the WebRTC IP handling policy for all current and future windows.
 // Switching to "default_public_and_private_interfaces" may fix calls stuck at "DTLS Connecting" when using VPNs, Tailscale, etc.

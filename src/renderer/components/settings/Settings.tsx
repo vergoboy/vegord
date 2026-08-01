@@ -152,6 +152,24 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         WebRTCIPHandlingPolicyPicker
     ],
 
+    "Privacy & Updates": [
+        {
+            key: "enableTelemetry",
+            title: "Anonymous usage statistics",
+            description:
+                "Periodically send an anonymous heartbeat (app version, platform, architecture) so we can see how many users are online. No personal data is included.",
+            defaultValue: true
+        },
+        {
+            key: "shareDiscordUsername",
+            title: "Share Discord username",
+            description:
+                "Include your Discord username in the usage statistics so we have a way to reach you (for example for support or giveaways).",
+            defaultValue: true,
+            disabled: () => Settings.store.enableTelemetry === false
+        }
+    ],
+
     "Developer Options": [DeveloperOptionsButton]
 };
 

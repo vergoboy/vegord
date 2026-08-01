@@ -17,13 +17,6 @@ import { loadView } from "./vegordStatic";
 
 let updaterWindow: BrowserWindow | null = null;
 
-autoUpdater.on("update-available", update => {
-    if (State.store.updater?.ignoredVersion === update.version) return;
-    if ((State.store.updater?.snoozeUntil ?? 0) > Date.now()) return;
-
-    openUpdater(update);
-});
-
 autoUpdater.on("update-downloaded", () => setTimeout(() => autoUpdater.quitAndInstall(), 100));
 autoUpdater.on("download-progress", p =>
     updaterWindow?.webContents.send(UpdaterIpcEvents.DOWNLOAD_PROGRESS, p.percent)

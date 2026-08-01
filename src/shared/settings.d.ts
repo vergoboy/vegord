@@ -38,6 +38,9 @@ export interface Settings {
 
     spellCheckLanguages?: string[];
 
+    enableTelemetry?: boolean;
+    shareDiscordUsername?: boolean;
+
     audio?: {
         workaround?: boolean;
 
@@ -69,5 +72,9 @@ export interface State {
     updater?: {
         ignoredVersion?: string;
         snoozeUntil?: number;
+    };
+
+    telemetry?: {
+        clientId?: string;
     };
 }

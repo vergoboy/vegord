@@ -5,6 +5,10 @@
     "description": "Vegcord is a custom Discord desktop app",
     "keywords": [],
     "homepage": "https://vergoboy.ir/vegord",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/vergoboy/vegord"
+    },
     "license": "GPL-3.0-or-later",
     "author": "Vergoboy",
     "main": "dist/js/main.js",

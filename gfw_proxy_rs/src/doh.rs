@@ -4,9 +4,10 @@ use std::io::Write as _;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use std::cmp::Ordering as CmpOrdering;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use parking_lot::RwLock;
@@ -28,17 +29,27 @@ pub struct DohPerf {
     pub rtt_ms: Vec<f64>,
 }
 
+/// One result of a DoH probe pass: measured RTT for a single candidate server.
+#[derive(Debug, Clone)]
+pub struct DohProbeResult {
+    pub index: usize,
+    pub url: &'static str,
+    pub avg_rtt_ms: Option<f64>,
+    pub successes: usize,
+    pub failures: usize,
+}
+
 /// Shared state for a single in-flight DoH lookup so concurrent queries for the
 /// same host coalesce into one network request instead of hammering DoH servers.
 struct PendingQuery {
     done: bool,
-    result: Option<IpAddr>,
+    result: Option<Vec<IpAddr>>,
 }
 
 pub struct DohClient {
     config: Config,
     http_client: Client,
-    dns_cache: RwLock<HashMap<String, IpAddr>>,
+    dns_cache: RwLock<HashMap<String, Vec<IpAddr>>>,
     pending: parking_lot::RwLock<HashMap<String, Arc<tokio::sync::Mutex<PendingQuery>>>>,
     discord_mgr: Arc<DiscordManager>,
     pub current_doh_index: AtomicUsize,
@@ -47,6 +58,11 @@ pub struct DohClient {
     pub failed_queries: AtomicU64,
     pub total_switch_count: AtomicU64,
     pub doh_perf: RwLock<Vec<DohPerf>>,
+    pub probe_results: RwLock<Vec<DohProbeResult>>,
+    probe_inflight: AtomicBool,
+    last_scan_ms: AtomicI64,
+    gateway_open_ms: AtomicI64,
+    gateway_close_ms: AtomicI64,
 }
 
 impl DohClient {
@@ -55,9 +71,15 @@ impl DohClient {
         // This way the DoH server connection also benefits from offline-DNS clean IPs
         // and TLS ClientHello fragmentation. Without this, DoH servers are resolved
         // via the polluted system resolver and blocked by SNI-based filtering.
+        //
+        // This is NOT a circular dependency: every hostname-based DoH server is covered
+        // by get_offline_dns(), so when the proxy resolves the DoH server's hostname it
+        // returns immediately without recursing into another DoH query.
+        let proxy_url = format!("http://127.0.0.1:{}", config.listen_port);
         let http_client = Client::builder()
             .timeout(Duration::from_secs(config.doh_timeout_sec))
             .danger_accept_invalid_certs(config.allow_insecure)
+            .proxy(reqwest::Proxy::all(&proxy_url).unwrap_or_else(|_| reqwest::Proxy::all("http://127.0.0.1:4500").unwrap()))
             .build()
             .unwrap_or_else(|_| Client::new());
 
@@ -84,12 +106,192 @@ impl DohClient {
             failed_queries: AtomicU64::new(0),
             total_switch_count: AtomicU64::new(0),
             doh_perf: RwLock::new(perf),
+            probe_results: RwLock::new(Vec::new()),
+            probe_inflight: AtomicBool::new(false),
+            last_scan_ms: AtomicI64::new(0),
+            gateway_open_ms: AtomicI64::new(0),
+            gateway_close_ms: AtomicI64::new(0),
         })
     }
 
     pub fn get_current_url(&self) -> &'static str {
         let idx = self.current_doh_index.load(Ordering::Relaxed) % DOH_SERVERS.len();
         DOH_SERVERS[idx]
+    }
+
+    /// True when this hostname is a Discord gateway endpoint. Used to detect
+    /// Discord reconnects: a gateway connection opening shortly after one closed
+    /// means Discord left the "connected" state and is reconnecting/loading.
+    pub fn is_gateway_host(host: &str) -> bool {
+        let h = host.to_lowercase();
+        h.contains("gateway") && DiscordManager::is_discord_domain(&h)
+    }
+
+    pub fn note_gateway_connect(self: &Arc<Self>) {
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let prev_open = self.gateway_open_ms.swap(now_ms, Ordering::Relaxed);
+        let close_ms = self.gateway_close_ms.load(Ordering::Relaxed);
+
+        if prev_open > 0 && close_ms > prev_open {
+            let gap_ms = now_ms - close_ms;
+            let window_ms = (self.config.doh_reconnect_window_sec as i64) * 1000;
+            if gap_ms > 1000 && gap_ms < window_ms {
+                self.trigger_rescan("gateway-reconnect");
+            }
+        }
+    }
+
+    pub fn note_gateway_disconnect(&self) {
+        self.gateway_close_ms
+            .store(chrono::Utc::now().timestamp_millis(), Ordering::Relaxed);
+    }
+
+    /// Fire-and-forget rescan, throttled by `doh_min_rescan_interval_sec`.
+    pub fn trigger_rescan(self: &Arc<Self>, reason: &str) {
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let last = self.last_scan_ms.load(Ordering::Relaxed);
+        let min_gap = (self.config.doh_min_rescan_interval_sec as i64) * 1000;
+        if now_ms - last < min_gap {
+            return;
+        }
+        println!(
+            "[{}] [DoH PROBE] rescan triggered (reason={})",
+            now_iso(),
+            reason
+        );
+        let this = Arc::clone(self);
+        tokio::spawn(async move {
+            this.probe_and_select().await;
+        });
+    }
+
+    /// Probe every candidate DoH server, rank them by measured RTT and select the
+    /// best (lowest avg RTT) as the active server. Parallelized with a concurrency
+    /// cap so slow/unreachable servers do not stall the whole pass.
+    pub async fn probe_and_select(self: &Arc<Self>) -> Vec<DohProbeResult> {
+        if self.probe_inflight.swap(true, Ordering::SeqCst) {
+            return self.probe_results.read().clone();
+        }
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        self.last_scan_ms.store(now_ms, Ordering::Relaxed);
+
+        let attempts = self.config.doh_probe_attempts.max(1);
+        let timeout_ms = (self.config.doh_probe_timeout_sec.max(1) as f64 * 1000.0) as u64;
+        let concurrency = self.config.doh_probe_concurrency.max(1);
+
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+        let mut tasks = Vec::with_capacity(DOH_SERVERS.len());
+        for (i, url) in DOH_SERVERS.iter().enumerate() {
+            let sem = Arc::clone(&semaphore);
+            let this = Arc::clone(self);
+            let url = *url;
+            tasks.push(tokio::spawn(async move {
+                let _permit = sem.acquire().await;
+                let mut rtts = Vec::new();
+                let mut failures = 0usize;
+                for _ in 0..attempts {
+                    match this.probe_server(url, timeout_ms).await {
+                        Some(rtt) => rtts.push(rtt),
+                        None => failures += 1,
+                    }
+                }
+                let avg = if rtts.is_empty() {
+                    None
+                } else {
+                    Some(rtts.iter().sum::<f64>() / rtts.len() as f64)
+                };
+                DohProbeResult {
+                    index: i,
+                    url,
+                    avg_rtt_ms: avg,
+                    successes: rtts.len(),
+                    failures,
+                }
+            }));
+        }
+
+        let mut results = Vec::with_capacity(DOH_SERVERS.len());
+        for task in tasks {
+            if let Ok(r) = task.await {
+                results.push(r);
+            }
+        }
+
+        results.sort_by(|a, b| match (a.avg_rtt_ms, b.avg_rtt_ms) {
+            (Some(x), Some(y)) => x.partial_cmp(&y).unwrap_or(CmpOrdering::Equal),
+            (Some(_), None) => CmpOrdering::Less,
+            (None, Some(_)) => CmpOrdering::Greater,
+            (None, None) => CmpOrdering::Equal,
+        });
+
+        if let Some(best) = results.first() {
+            if best.avg_rtt_ms.is_some() {
+                let idx = best.index;
+                self.current_doh_index.store(idx, Ordering::Relaxed);
+                {
+                    let mut perf = self.doh_perf.write();
+                    perf[idx].blacklisted_until = 0;
+                }
+                println!(
+                    "[{}] [DoH PROBE] selected #{} {} (avg RTT={:.1}ms)",
+                    now_iso(),
+                    idx,
+                    DOH_SERVERS[idx],
+                    best.avg_rtt_ms.unwrap_or(0.0)
+                );
+            }
+        }
+
+        self.probe_results.write().clone_from(&results);
+        self.probe_inflight.store(false, Ordering::SeqCst);
+
+        let mut lines = vec![format!("DoH Probe Ranking @ {}", now_iso())];
+        for (rank, r) in results.iter().enumerate() {
+            let rtt = r
+                .avg_rtt_ms
+                .map_or("FAIL".to_string(), |v| format!("{:.1}ms", v));
+            lines.push(format!(
+                "  #{:2} RANK={:2} RTT={:>9} OK={} FAIL={} {}",
+                r.index, rank + 1, rtt, r.successes, r.failures, r.url
+            ));
+        }
+        if let Ok(mut f) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.config.data_dir.join("DoH_probe_ranking.txt"))
+        {
+            let _ = writeln!(f, "{}", lines.join("\n"));
+        }
+
+        results
+    }
+
+    /// One DoH measurement: resolve `discord.com` through the given server and
+    /// return the round-trip time in ms on success, or None on timeout/failure.
+    async fn probe_server(&self, url: &str, timeout_ms: u64) -> Option<f64> {
+        let query_bytes = build_doh_query("discord.com")?;
+        let b64_q = URL_SAFE_NO_PAD.encode(&query_bytes);
+        let full_url = format!("{}{}", url, b64_q);
+        let t0 = Instant::now();
+        let fut = self
+            .http_client
+            .get(&full_url)
+            .query(&[("type", "A"), ("ct", "application/dns-message")])
+            .header("accept", "application/dns-message")
+            .send();
+        match tokio::time::timeout(Duration::from_millis(timeout_ms), fut).await {
+            Ok(Ok(resp)) if resp.status().is_success() => {
+                let bytes = resp.bytes().await.ok()?;
+                let msg = Message::from_vec(&bytes).ok()?;
+                let has_a = msg.answers().iter().any(|r| r.record_type() == RecordType::A);
+                if has_a {
+                    Some((t0.elapsed().as_secs_f64() * 1000.0 * 10.0).round() / 10.0)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 
     fn log_switch_event(&self, old_url: &str, new_url: &str, total_switches: u64) {
@@ -151,20 +353,29 @@ impl DohClient {
     }
 
     pub async fn query(&self, server_name: &str) -> Option<IpAddr> {
+        self.query_all(server_name)
+            .await
+            .and_then(|ips| ips.first().copied())
+    }
+
+    /// Resolve a host to all of its A records (via static mapping, the DNS
+    /// cache, or DoH). The full list is kept so the proxy can fall back to an
+    /// alternate IP when the GFW resets connections to the primary one.
+    pub async fn query_all(&self, server_name: &str) -> Option<Vec<IpAddr>> {
         // 1. Check offline DNS static mapping
         if let Some(&ip_str) = get_offline_dns().get(server_name) {
             if let Ok(ip) = IpAddr::from_str(ip_str) {
                 println!("[{}] [DNS] offline {} -> {}", now_iso(), server_name, ip);
-                return Some(ip);
+                return Some(vec![ip]);
             }
         }
 
         // 2. Check in-memory DNS cache
         {
             let cache = self.dns_cache.read();
-            if let Some(&ip) = cache.get(server_name) {
-                println!("[{}] [DNS] cached {} -> {}", now_iso(), server_name, ip);
-                return Some(ip);
+            if let Some(ips) = cache.get(server_name) {
+                println!("[{}] [DNS] cached {} -> {:?}", now_iso(), server_name, ips);
+                return Some(ips.clone());
             }
         }
 
@@ -194,13 +405,13 @@ impl DohClient {
 
         let mut guard = waiter.lock().await;
         if guard.done {
-            return guard.result;
+            return guard.result.clone();
         }
 
         // We are the leader: perform the actual DoH resolution while followers wait.
         let result = self.resolve_via_doh(server_name).await;
         guard.done = true;
-        guard.result = result;
+        guard.result = result.clone();
         drop(guard);
 
         // Let a future query for this host start fresh (the DNS cache absorbs hits).
@@ -208,7 +419,7 @@ impl DohClient {
         result
     }
 
-    async fn resolve_via_doh(&self, server_name: &str) -> Option<IpAddr> {
+    async fn resolve_via_doh(&self, server_name: &str) -> Option<Vec<IpAddr>> {
         self.total_queries.fetch_add(1, Ordering::Relaxed);
         let is_discord = DiscordManager::is_discord_domain(server_name);
         println!(
@@ -225,16 +436,7 @@ impl DohClient {
             let idx = self.current_doh_index.load(Ordering::Relaxed) % DOH_SERVERS.len();
             let doh_base = DOH_SERVERS[idx];
 
-            let query_res = (|| {
-                let name = Name::from_str(server_name).ok()?;
-                let mut msg = Message::new();
-                let query = Query::query(name, RecordType::A);
-                msg.add_query(query);
-                msg.set_recursion_desired(true);
-                msg.to_vec().ok()
-            })();
-
-            if let Some(query_bytes) = query_res {
+            if let Some(query_bytes) = build_doh_query(server_name) {
                 let b64_q = URL_SAFE_NO_PAD.encode(&query_bytes);
                 let full_url = format!("{}{}", doh_base, b64_q);
                 let t0 = Instant::now();
@@ -251,7 +453,6 @@ impl DohClient {
                         let rtt = (t0.elapsed().as_secs_f64() * 1000.0 * 10.0).round() / 10.0;
                         if let Ok(bytes) = resp.bytes().await {
                             if let Ok(msg) = Message::from_vec(&bytes) {
-                                let mut resolved_first: Option<IpAddr> = None;
                                 let mut all_ips = Vec::new();
 
                                 for record in msg.answers() {
@@ -259,18 +460,19 @@ impl DohClient {
                                         if let Some(rdata) = record.data() {
                                             if let Some(a_rec) = rdata.as_a() {
                                                 let ip = IpAddr::V4(a_rec.0);
-                                                if resolved_first.is_none() {
-                                                    resolved_first = Some(ip);
+                                                if !all_ips.contains(&ip) {
+                                                    all_ips.push(ip);
                                                 }
-                                                all_ips.push(ip);
                                             }
                                         }
                                     }
                                 }
 
-                                if let Some(first_ip) = resolved_first {
-                                    self.dns_cache.write().insert(server_name.to_string(), first_ip);
-                                    if is_discord && !all_ips.is_empty() {
+                                if !all_ips.is_empty() {
+                                    self.dns_cache
+                                        .write()
+                                        .insert(server_name.to_string(), all_ips.clone());
+                                    if is_discord {
                                         self.discord_mgr.feed_ips(&all_ips, self.config.discord_max_ips);
                                     }
 
@@ -284,13 +486,13 @@ impl DohClient {
                                     }
 
                                     println!(
-                                        "[{}] [DNS] {} -> {} (RTT={}ms)",
+                                        "[{}] [DNS] {} -> {:?} (RTT={}ms)",
                                         now_iso(),
                                         server_name,
-                                        first_ip,
+                                        all_ips,
                                         rtt
                                     );
-                                    return Some(first_ip);
+                                    return Some(all_ips);
                                 } else {
                                     println!(
                                         "[{}] [DoH WARN] No A record from server #{} for {}",
@@ -351,9 +553,18 @@ impl DohClient {
         let cache = self.dns_cache.read();
         let mut list: Vec<(String, IpAddr)> = cache
             .iter()
-            .map(|(k, v)| (k.clone(), *v))
+            .flat_map(|(k, ips)| ips.iter().map(move |ip| (k.clone(), *ip)))
             .collect();
         list.sort_by(|a, b| a.0.cmp(&b.0));
         list
     }
+}
+
+fn build_doh_query(server_name: &str) -> Option<Vec<u8>> {
+    let name = Name::from_str(server_name).ok()?;
+    let mut msg = Message::new();
+    let query = Query::query(name, RecordType::A);
+    msg.add_query(query);
+    msg.set_recursion_desired(true);
+    msg.to_vec().ok()
 }

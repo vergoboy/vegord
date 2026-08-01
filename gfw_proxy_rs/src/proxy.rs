@@ -35,15 +35,7 @@ impl ProxyServer {
         })
     }
 
-    pub async fn run(self: Arc<Self>) -> std::io::Result<()> {
-        let bind_addr = format!("0.0.0.0:{}", self.config.listen_port);
-        let listener = TcpListener::bind(&bind_addr).await?;
-        println!(
-            "[{}] [START] Rust GFW Proxy Listening on {}",
-            now_iso(),
-            bind_addr
-        );
-
+    pub async fn run(self: Arc<Self>, listener: TcpListener) -> std::io::Result<()> {
         loop {
             match listener.accept().await {
                 Ok((socket, _peer_addr)) => {
@@ -308,16 +300,43 @@ impl ProxyServer {
         let port: u16 = port_str.parse().unwrap_or(443);
         println!("[{}] [CONNECT] {}:{}", now_iso(), host, port);
 
-        let target_ip_opt = self.resolve_target(host).await;
-        if let Some(target_ip) = target_ip_opt {
-            let res = self.connect_target(target_ip, port).await;
-            if let Ok(backend) = res {
-                let resp = b"HTTP/1.1 200 Connection established\r\nProxy-agent: VegordProxy/3.0\r\n\r\n";
-                if client.write_all(resp).await.is_ok() {
-                    self.relay_bidirectional(client, backend, target_ip).await;
+        let is_gateway = DohClient::is_gateway_host(host);
+        if is_gateway {
+            self.doh.note_gateway_connect();
+        }
+
+        let targets = self.resolve_targets(host).await;
+        let mut backend: Option<TcpStream> = None;
+        if !targets.is_empty() {
+            let max_attempts = self.config.connect_retries.max(1);
+            for attempt in 0..max_attempts {
+                match self.connect_target(targets[0], port).await {
+                    Ok(stream) => {
+                        backend = Some(stream);
+                        break;
+                    }
+                    Err(_) if attempt + 1 < max_attempts => {
+                        tokio::time::sleep(Duration::from_millis(80)).await;
+                    }
+                    Err(_) => break,
                 }
-                return;
             }
+        }
+
+        if let Some(backend) = backend {
+            let resp = b"HTTP/1.1 200 Connection established\r\nProxy-agent: VegordProxy/3.0\r\n\r\n";
+            if client.write_all(resp).await.is_ok() {
+                self.relay_bidirectional(client, backend, host, port, &targets)
+                    .await;
+            }
+            if is_gateway {
+                self.doh.note_gateway_disconnect();
+            }
+            return;
+        }
+
+        if is_gateway {
+            self.doh.note_gateway_disconnect();
         }
 
         self.stats.conn_filtered.fetch_add(1, Ordering::Relaxed);
@@ -345,24 +364,28 @@ impl ProxyServer {
         }
     }
 
-    async fn resolve_target(&self, host: &str) -> Option<IpAddr> {
+    async fn resolve_targets(&self, host: &str) -> Vec<IpAddr> {
         if let Ok(ip) = IpAddr::from_str(host) {
-            return Some(ip);
+            return vec![ip];
         }
 
         if DiscordManager::is_discord_domain(host) {
+            let mut ips = Vec::new();
             if let Some(best_ip) = self.discord.get_best_ip() {
-                println!(
-                    "[{}] [DISCORD] routing {} via best-IP {}",
-                    now_iso(),
-                    host,
-                    best_ip
-                );
-                return Some(best_ip);
+                ips.push(best_ip);
+            }
+            for (ip, _, _) in self.discord.get_ips_snapshot() {
+                if !ips.contains(&ip) {
+                    ips.push(ip);
+                }
+            }
+            if !ips.is_empty() {
+                println!("[{}] [DISCORD] routing {} via {:?}", now_iso(), host, ips);
+                return ips;
             }
         }
 
-        self.doh.query(host).await
+        self.doh.query_all(host).await.unwrap_or_default()
     }
 
     async fn connect_target(&self, ip: IpAddr, port: u16) -> std::io::Result<TcpStream> {
@@ -400,15 +423,63 @@ impl ProxyServer {
     }
 
     async fn connect_and_relay(&self, mut client: TcpStream, host: &str, port: u16) {
-        let target_ip_opt = self.resolve_target(host).await;
-        if let Some(target_ip) = target_ip_opt {
-            if let Ok(backend) = self.connect_target(target_ip, port).await {
-                let resp = b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
-                if client.write_all(resp).await.is_ok() {
-                    self.relay_bidirectional(client, backend, target_ip).await;
-                }
-                return;
+        let is_gateway = DohClient::is_gateway_host(host);
+        if is_gateway {
+            self.doh.note_gateway_connect();
+        }
+
+        let targets = self.resolve_targets(host).await;
+        if targets.is_empty() {
+            if is_gateway {
+                self.doh.note_gateway_disconnect();
             }
+            let _ = client
+                .write_all(b"\x05\x04\x00\x01\x00\x00\x00\x00\x00\x00")
+                .await;
+            return;
+        }
+
+        // The GFW intermittently resets individual TCP connections, especially
+        // to Cloudflare-fronted domains (e.g. api.vencord.dev). A single reset
+        // would surface as a failed request, so retry the connect a few times
+        // to absorb the sporadic RSTs instead of giving up immediately.
+        let mut backend: Option<TcpStream> = None;
+        let max_attempts = self.config.connect_retries.max(1);
+        for attempt in 0..max_attempts {
+            match self.connect_target(targets[0], port).await {
+                Ok(stream) => {
+                    backend = Some(stream);
+                    break;
+                }
+                Err(_) if attempt + 1 < max_attempts => {
+                    println!(
+                        "[{}] [RETRY] {} ({}) connect attempt {}/{}",
+                        now_iso(),
+                        host,
+                        targets[0],
+                        attempt + 1,
+                        max_attempts
+                    );
+                    tokio::time::sleep(Duration::from_millis(80)).await;
+                }
+                Err(_) => break,
+            }
+        }
+
+        if let Some(backend) = backend {
+            let resp = b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
+            if client.write_all(resp).await.is_ok() {
+                self.relay_bidirectional(client, backend, host, port, &targets)
+                    .await;
+            }
+            if is_gateway {
+                self.doh.note_gateway_disconnect();
+            }
+            return;
+        }
+
+        if is_gateway {
+            self.doh.note_gateway_disconnect();
         }
 
         let _ = client
@@ -420,7 +491,9 @@ impl ProxyServer {
         &self,
         mut client: TcpStream,
         mut backend: TcpStream,
-        ip: IpAddr,
+        host: &str,
+        port: u16,
+        targets: &[IpAddr],
     ) {
         // Read first payload from client (TLS Client Hello)
         let mut first_buf = [0u8; 16384];
@@ -431,19 +504,58 @@ impl ProxyServer {
             _ => return,
         };
 
-        // Send first payload (Client Hello) with TLS SNI fragmentation!
-        if let Err(err) = send_fragmented_async(
-            &mut backend,
-            &first_buf[..first_n],
-            self.config.num_fragment,
-            self.config.fragment_sleep_ms,
-        )
-        .await
-        {
-            eprintln!("[{}] [FRAG ERR] {}", now_iso(), err);
+        // Send the ClientHello with TLS SNI fragmentation. If the connection is
+        // reset mid-handshake (GFW RST against Cloudflare etc.), the client has
+        // not received anything yet — it is still waiting for the ServerHello —
+        // so we can transparently reconnect to the same or an alternate IP and
+        // resend the exact same ClientHello.
+        let mut ip_idx = 0usize;
+        let max_relay_attempts = self.config.relay_retries.max(1);
+        let mut delivered = false;
+        for attempt in 0..max_relay_attempts {
+            if attempt > 0 {
+                if targets.len() > 1 {
+                    ip_idx = (ip_idx + 1) % targets.len();
+                }
+                let ip = targets[ip_idx];
+                println!("[{}] [FRAG RETRY] {} via {}", now_iso(), host, ip);
+                match self.connect_target(ip, port).await {
+                    Ok(stream) => backend = stream,
+                    Err(_) => continue,
+                }
+            }
+
+            match send_fragmented_async(
+                &mut backend,
+                &first_buf[..first_n],
+                self.config.num_fragment,
+                self.config.fragment_sleep_ms,
+            )
+            .await
+            {
+                Ok(()) => {
+                    delivered = true;
+                    break;
+                }
+                Err(err) => {
+                    eprintln!(
+                        "[{}] [FRAG ERR] {} (attempt {}/{})",
+                        now_iso(),
+                        err,
+                        attempt + 1,
+                        max_relay_attempts
+                    );
+                    if attempt + 1 >= max_relay_attempts {
+                        break;
+                    }
+                }
+            }
+        }
+        if !delivered {
             return;
         }
 
+        let ip = targets[ip_idx];
         self.stats.record_ul(ip, first_n as u64);
 
         // Bi-directional async forwarding

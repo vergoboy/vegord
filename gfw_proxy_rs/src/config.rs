@@ -11,6 +11,8 @@ pub struct Config {
     pub allow_insecure: bool,
     pub socket_timeout_sec: u64,
     pub voice_socket_timeout_sec: u64,
+    pub connect_retries: u32,
+    pub relay_retries: u32,
     pub doh_max_retries: usize,
     pub doh_max_fails_before_switch: u32,
     pub doh_blacklist_sec: u64,
@@ -20,6 +22,12 @@ pub struct Config {
     pub discord_max_ips: usize,
     pub discord_min_rtt_ms: f64,
     pub data_dir: PathBuf,
+    pub control_port: u16,
+    pub doh_probe_attempts: usize,
+    pub doh_probe_timeout_sec: u64,
+    pub doh_probe_concurrency: usize,
+    pub doh_min_rescan_interval_sec: u64,
+    pub doh_reconnect_window_sec: u64,
 }
 
 impl Default for Config {
@@ -32,6 +40,8 @@ impl Default for Config {
             allow_insecure: true,
             socket_timeout_sec: 8,
             voice_socket_timeout_sec: 120,
+            connect_retries: 3,
+            relay_retries: 3,
             doh_max_retries: 5,
             doh_max_fails_before_switch: 3,
             doh_blacklist_sec: 300,
@@ -41,6 +51,12 @@ impl Default for Config {
             discord_max_ips: 20,
             discord_min_rtt_ms: 1.0,
             data_dir: PathBuf::from("."),
+            control_port: 4501,
+            doh_probe_attempts: 2,
+            doh_probe_timeout_sec: 4,
+            doh_probe_concurrency: 8,
+            doh_min_rescan_interval_sec: 60,
+            doh_reconnect_window_sec: 120,
         }
     }
 }
