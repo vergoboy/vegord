@@ -55,11 +55,9 @@ impl DohClient {
         // This way the DoH server connection also benefits from offline-DNS clean IPs
         // and TLS ClientHello fragmentation. Without this, DoH servers are resolved
         // via the polluted system resolver and blocked by SNI-based filtering.
-        let proxy_url = format!("http://127.0.0.1:{}", config.listen_port);
         let http_client = Client::builder()
             .timeout(Duration::from_secs(config.doh_timeout_sec))
             .danger_accept_invalid_certs(config.allow_insecure)
-            .proxy(reqwest::Proxy::all(&proxy_url).unwrap_or_else(|_| reqwest::Proxy::all("http://127.0.0.1:4500").unwrap()))
             .build()
             .unwrap_or_else(|_| Client::new());
 

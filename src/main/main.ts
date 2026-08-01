@@ -28,6 +28,7 @@ console.log("Vegcord v" + app.getVersion());
 process.env.VENCORD_USER_DATA_DIR = DATA_DIR;
 
 const isLinux = process.platform === "linux";
+const isWindows = process.platform === "win32";
 
 export let enableHardwareAcceleration = true;
 
@@ -79,7 +80,7 @@ function init() {
     disabledFeatures.add("HardwareMediaKeyHandling");
     disabledFeatures.add("MediaSessionService");
 
-    if (isLinux && !isProxyDisabled()) {
+    if ((isLinux || isWindows) && !isProxyDisabled()) {
         // Use GFW-resistant proxy (unless --no-proxy passed or custom --proxy-server on CLI)
         const customProxy = getCustomProxyAddress();
         if (customProxy) {
@@ -94,12 +95,16 @@ function init() {
         console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
 
         // Support TTS on Linux using https://wiki.archlinux.org/title/Speech_dispatcher
-        app.commandLine.appendSwitch("enable-speech-dispatcher");
+        if (isLinux) {
+            app.commandLine.appendSwitch("enable-speech-dispatcher");
+        }
 
         // This is needed to fix washed out colours - https://github.com/electron/electron/issues/49566
         // Supposed to be fixed already according to comments there, but it's just not lol, I can repro on Electron 43.0.0
         // when moving the window from my main monitor (HDR - not sure if this is relevant lol) to second monitor (SDR) and back
-        disabledFeatures.add("WaylandWpColorManagerV1");
+        if (isLinux) {
+            disabledFeatures.add("WaylandWpColorManagerV1");
+        }
 
         // Log voice-relevant Chrome flags for debugging
         console.log("[Voice] Proxy SOCKS5=127.0.0.1:4500, WebRTC=disable_non_proxied_udp");
