@@ -753,51 +753,58 @@ function ModalComponent({
                             const height = Number(qualitySettings.resolution);
                             const width = Math.round(height * (16 / 9));
 
-                            const conn = [...MediaEngineStore.getMediaEngine().connections].find(
-                                connection => connection.streamUserId === UserStore.getCurrentUser().id
-                            );
-
-                            if (conn) {
-                                conn.videoStreamParameters[0].maxFrameRate = frameRate;
-                                conn.videoStreamParameters[0].maxResolution ??= { width: 0, height: 0 };
-                                conn.videoStreamParameters[0].maxResolution.height = height;
-                                conn.videoStreamParameters[0].maxResolution.width = width;
-                            }
-
                             submit({
                                 id: selected!,
                                 ...settings
                             });
 
-                            setTimeout(async () => {
+                            // Discord builds the stream config once the media
+                            // connection is live, which can be AFTER this picker
+                            // closes. Retry applying the encoder caps and track
+                            // constraints until the stream is up, so the selected
+                            // quality is actually honored instead of silently
+                            // staying at the capture's native (high) resolution.
+                            const start = Date.now();
+                            const attempt = async () => {
                                 const conn = [...MediaEngineStore.getMediaEngine().connections].find(
                                     connection => connection.streamUserId === UserStore.getCurrentUser().id
                                 );
-                                if (!conn) return;
+
+                                if (conn?.videoStreamParameters?.[0]) {
+                                    conn.videoStreamParameters[0].maxFrameRate = frameRate;
+                                    conn.videoStreamParameters[0].maxResolution ??= { width: 0, height: 0 };
+                                    conn.videoStreamParameters[0].maxResolution.height = height;
+                                    conn.videoStreamParameters[0].maxResolution.width = width;
+                                }
 
                                 // @ts-expect-error incorrect type
-                                const track = conn.input.stream.getVideoTracks()[0];
+                                const track = conn?.input?.stream?.getVideoTracks?.()[0];
+                                if (track) {
+                                    const constraints = {
+                                        ...track.getConstraints(),
+                                        frameRate: { min: frameRate, ideal: frameRate },
+                                        width: { min: 640, ideal: width, max: width },
+                                        height: { min: 480, ideal: height, max: height },
+                                        advanced: [{ width: width, height: height }],
+                                        resizeMode: "crop-and-scale"
+                                    };
 
-                                const constraints = {
-                                    ...track.getConstraints(),
-                                    frameRate: { min: frameRate, ideal: frameRate },
-                                    width: { min: 640, ideal: width, max: width },
-                                    height: { min: 480, ideal: height, max: height },
-                                    advanced: [{ width: width, height: height }],
-                                    resizeMode: "none"
-                                };
+                                    try {
+                                        await track.applyConstraints(constraints);
 
-                                try {
-                                    await track.applyConstraints(constraints);
-
-                                    logger.info(
-                                        "Applied constraints successfully. New constraints:",
-                                        track.getConstraints()
-                                    );
-                                } catch (e) {
-                                    logger.error("Failed to apply constraints.", e);
+                                        logger.info(
+                                            "Applied constraints successfully. New constraints:",
+                                            track.getConstraints()
+                                        );
+                                        return;
+                                    } catch (e) {
+                                        // track not resizable yet; retry once the stream is live
+                                    }
                                 }
-                            }, 100);
+
+                                if (Date.now() - start < 15000) setTimeout(attempt, 250);
+                            };
+                            attempt();
                         } catch (error) {
                             logger.error("Error while submitting stream.", error);
                         }

@@ -11,6 +11,11 @@ import { isLinux } from "renderer/utils";
 
 const logger = new Logger("VegcordStreamFixes");
 
+// Seed a default quality up-front so patchStreamQuality / the capture path
+// always have a value to work with, even if getDefaultGoliveQuality() is
+// consulted before the picker has opened for the first time.
+State.store.screenshareQuality ??= { resolution: "720", frameRate: "30" };
+
 if (isLinux) {
     const original = navigator.mediaDevices.getDisplayMedia;
 
@@ -41,7 +46,7 @@ if (isLinux) {
             width: { min: 640, ideal: width, max: width },
             height: { min: 480, ideal: height, max: height },
             advanced: [{ width: width, height: height }],
-            resizeMode: "none"
+            resizeMode: "crop-and-scale"
         };
 
         track
