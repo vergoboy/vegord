@@ -13,6 +13,7 @@ pub struct DiscordIpInfo {
     pub rtt: Option<f64>,
     pub last_ping: u64,
     pub samples: Vec<f64>,
+    pub implausible_logged: bool,
 }
 
 pub struct DiscordManager {
@@ -55,6 +56,7 @@ impl DiscordManager {
                         rtt: None,
                         last_ping: 0,
                         samples: Vec::new(),
+                        implausible_logged: false,
                     },
                 );
                 println!("[{}] [DISCORD] added IP {} to ping pool", crate::stats::now_iso(), ip);
@@ -108,13 +110,6 @@ impl DiscordManager {
                             drop(stream);
                             let rtt = (rtt * 10.0).round() / 10.0;
                             if rtt < config.discord_min_rtt_ms {
-                                println!(
-                                    "[{}] [DISCORD] implausible RTT {:.1}ms for {} (< {}ms, likely ISP interception), ignoring",
-                                    crate::stats::now_iso(),
-                                    rtt,
-                                    ip,
-                                    config.discord_min_rtt_ms
-                                );
                                 None
                             } else {
                                 Some(rtt)
@@ -129,6 +124,9 @@ impl DiscordManager {
                         info.last_ping = now_secs;
                         info.rtt = rtt_opt;
                         if let Some(rtt) = rtt_opt {
+                            if info.implausible_logged {
+                                info.implausible_logged = false;
+                            }
                             info.samples.push(rtt);
                             if info.samples.len() > 10 {
                                 info.samples.remove(0);
@@ -138,6 +136,18 @@ impl DiscordManager {
                                 best_rtt_val = avg;
                                 best_ip_val = Some(ip);
                             }
+                        } else if !info.implausible_logged {
+                            // An implausible (likely ISP-intercepted) RTT repeats
+                            // every ping cycle for the same IP; log it once to
+                            // avoid spamming the connection log with thousands
+                            // of identical lines.
+                            info.implausible_logged = true;
+                            println!(
+                                "[{}] [DISCORD] implausible RTT for {} (< {}ms, likely ISP interception), ignoring",
+                                crate::stats::now_iso(),
+                                ip,
+                                config.discord_min_rtt_ms
+                            );
                         }
                     }
                 }

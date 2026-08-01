@@ -514,6 +514,9 @@ impl ProxyServer {
         let mut delivered = false;
         for attempt in 0..max_relay_attempts {
             if attempt > 0 {
+                // GFW RSTs tend to land in short bursts that hit every attempt
+                // within the same window, so space retries out a bit.
+                tokio::time::sleep(Duration::from_millis(self.config.relay_retry_sleep_ms)).await;
                 if targets.len() > 1 {
                     ip_idx = (ip_idx + 1) % targets.len();
                 }
@@ -533,10 +536,7 @@ impl ProxyServer {
             )
             .await
             {
-                Ok(()) => {
-                    delivered = true;
-                    break;
-                }
+                Ok(()) => {}
                 Err(err) => {
                     eprintln!(
                         "[{}] [FRAG ERR] {} (attempt {}/{})",
@@ -548,8 +548,65 @@ impl ProxyServer {
                     if attempt + 1 >= max_relay_attempts {
                         break;
                     }
+                    continue;
                 }
             }
+
+            // The ClientHello write may succeed into the kernel buffer even when
+            // the GFW RST is already in flight; the reset only surfaces as an
+            // error/EOF on the next read (while waiting for the ServerHello).
+            // Conversely, DPI may silently drop the ServerHello packets, leaving
+            // the backend connection half-open (no error, no data). Until any
+            // backend byte reaches the client, the client is still waiting for
+            // the ServerHello, so we can transparently replay the exact same
+            // ClientHello on the next IP.
+            let is_tls = first_buf[0] == 0x16 && first_n >= 6 && first_buf[5] == 0x01;
+            if is_tls {
+                let handshake_timeout =
+                    Duration::from_secs(self.config.relay_handshake_timeout_sec);
+                let mut hello = [0u8; 8192];
+                match timeout(handshake_timeout, backend.read(&mut hello)).await {
+                    Ok(Ok(0)) | Ok(Err(_)) => {
+                        eprintln!(
+                            "[{}] [FRAG HANDSHAKE RST] {} (attempt {}/{})",
+                            now_iso(),
+                            host,
+                            attempt + 1,
+                            max_relay_attempts
+                        );
+                        if attempt + 1 >= max_relay_attempts {
+                            break;
+                        }
+                        continue;
+                    }
+                    Ok(Ok(n)) => {
+                        if client.write_all(&hello[..n]).await.is_err() {
+                            break;
+                        }
+                        self.stats.record_dl(targets[ip_idx], n as u64);
+                    }
+                    Err(_) => {
+                        // ServerHello never arrived: either our fragmented
+                        // ClientHello was dropped or DPI throttled the response
+                        // during a probe burst. Either way the handshake is
+                        // dead; do not mark it delivered.
+                        eprintln!(
+                            "[{}] [FRAG HANDSHAKE TIMEOUT] {} (attempt {}/{})",
+                            now_iso(),
+                            host,
+                            attempt + 1,
+                            max_relay_attempts
+                        );
+                        if attempt + 1 >= max_relay_attempts {
+                            break;
+                        }
+                        continue;
+                    }
+                }
+            }
+
+            delivered = true;
+            break;
         }
         if !delivered {
             return;
