@@ -4,8 +4,8 @@ set -e
 # Uses the same approach as makepkg for compatibility
 
 pkgname=vegord-gfw-proxy
-pkgver=1.6.6
-pkgrel=9
+pkgver=1.6.7
+pkgrel=1
 pkgdir="/tmp/${pkgname}-pkg"
 srcdir="$(cd "$(dirname "$0")" && pwd)"
 
