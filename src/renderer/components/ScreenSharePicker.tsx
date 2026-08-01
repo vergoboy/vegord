@@ -715,7 +715,7 @@ function ModalComponent({
     const [selected, setSelected] = useState<string | undefined>(skipPicker ? screens[0].id : void 0);
     const [settings, setSettings] = useState<StreamSettings>({
         contentHint: "motion",
-        audio: true,
+        audio: false,
         includeSources: "None"
     });
     const qualitySettings = (useVegcordState().screenshareQuality ??= {
