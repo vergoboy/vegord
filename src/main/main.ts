@@ -10,6 +10,9 @@ import "./ipc";
 import "./userAssets";
 import "./vegordProtocol";
 
+import { existsSync } from "fs";
+import { join } from "path";
+
 import { app, BrowserWindow, dialog, nativeTheme } from "electron";
 
 import { startAnnouncements } from "./announcements";
@@ -100,7 +103,10 @@ function init() {
         console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
 
         // Support TTS on Linux using https://wiki.archlinux.org/title/Speech_dispatcher
-        if (isLinux) {
+        // Only enable when the speechd daemon is actually installed: without it,
+        // Chromium's TTS engine calls spd_open(), which tries to spawn the `speechd`
+        // binary and crashes the browser process with SIGTRAP on startup.
+        if (isLinux && (process.env.PATH ?? "").split(":").some(dir => existsSync(join(dir, "speechd")))) {
             app.commandLine.appendSwitch("enable-speech-dispatcher");
         }
 
