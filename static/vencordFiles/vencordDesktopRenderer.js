@@ -166,94 +166,112 @@ code, pre, .hljs {
     unicode-bidi: isolate;
     direction: ltr;
 }
-/* ==== Vegord Message bubbles ==== */
+/* ==== Vegord Message bubbles (Discord Bubble UX reference) ==== */
 [class*='messageListItem'] [class*='cozy'],
 [class*='messageListItem'] [class*='groupStart'] {
     width: fit-content;
-    max-width: min(78%, 460px);
+    max-width: min(78%, 440px);
     min-width: 0;
     margin: 2px auto 2px 10px;
-    padding: 6px 12px 16px !important;
+    padding: 7px 12px 16px !important;
     box-sizing: border-box;
-    border-radius: 16px 16px 16px 5px;
-    border: 1px solid rgba(255,255,255,.05);
-    background: #182533;
-    color: #fff;
-    filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.18));
+    border-radius: 18px 18px 18px 4px;
+    background: #262835;
+    color: #e7e8f0;
+    filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.3));
     display: flex;
     flex-direction: column;
     position: relative;
     overflow: visible;
+    font-size: 15px;
+    line-height: 1.4;
 }
 [class*='messageListItem'] {
     overflow: visible !important;
 }
-/* first bubble of a run gets breathing room; consecutive bubbles stay tight */
+/* group gap: first bubble of a run gets 14px; consecutive stay tight at 2px */
 [class*='messageListItem'][class*='vc-tg-first'] [class*='cozy'] {
-    margin-top: 10px !important;
+    margin-top: 14px !important;
 }
 [class*='messageListItem']:not([class*='vc-tg-first']) [class*='cozy'] {
-    padding-bottom: 6px !important;
+    margin-top: 2px !important;
 }
-/* colors from the Telegram reference */
-html[class*='theme-dark'] [class*='messageListItem'] [class*='cozy'] {
-    background: #182533;
-    border-color: rgba(255,255,255,.05);
-    color: #fff;
+/* others = in (left) */
+html[class*='theme-dark'] [class*='messageListItem']:not([class*='vc-own-message']) [class*='cozy'] {
+    background: #262835;
+    color: #e7e8f0;
 }
-html[class*='theme-light'] [class*='messageListItem'] [class*='cozy'] {
+html[class*='theme-light'] [class*='messageListItem']:not([class*='vc-own-message']) [class*='cozy'] {
     background: #ffffff;
-    border-color: rgba(0,0,0,.12);
+    border: 1px solid rgba(0,0,0,.12);
     color: #000;
 }
+/* own = out (right), Discord-violet */
 html[class*='theme-dark'] [class*='messageListItem'][class*='vc-own-message'] [class*='cozy'] {
-    background: #2b5278;
+    background: #4a3fc4;
     border: none;
-    color: #fff;
+    color: #f2f1ff;
 }
 html[class*='theme-light'] [class*='messageListItem'][class*='vc-own-message'] [class*='cozy'] {
-    background: #e1ffc7;
+    background: #e4e0fa;
     border: none;
-    color: #000;
+    color: #1c1633;
 }
 /* own bubbles hug the right edge */
 [class*='messageListItem'][class*='vc-own-message'] [class*='cozy'],
 [class*='messageListItem'][class*='vc-own-message'] [class*='groupStart'] {
     margin: 2px 10px 2px auto;
 }
-/* grouping radius: the tail-side corner is tight; own tails point right, others left */
-[class*='messageListItem']:not([class*='vc-tg-first']) [class*='cozy'] {
-    border-radius: 5px 16px 16px 5px;
+/* one clean border-radius rule per position (reference: tail corner is tight) */
+/* others: tail corner = bottom-left tight */
+[class*='messageListItem'][class*='vc-tg-first']:not([class*='vc-own-message']) [class*='cozy'],
+[class*='messageListItem'][class*='vc-tg-only']:not([class*='vc-own-message']) [class*='cozy'] {
+    border-radius: 18px 18px 18px 4px;
 }
-[class*='messageListItem'][class*='vc-tg-first'][class*='vc-own-message'] [class*='cozy'] {
-    border-radius: 16px 16px 5px 16px;
+[class*='messageListItem']:not([class*='vc-tg-first']):not([class*='vc-own-message']) [class*='cozy'] {
+    border-radius: 4px 18px 18px 4px;
+}
+/* own: tail corner = bottom-right tight */
+[class*='messageListItem'][class*='vc-tg-first'][class*='vc-own-message'] [class*='cozy'],
+[class*='messageListItem'][class*='vc-tg-only'][class*='vc-own-message'] [class*='cozy'] {
+    border-radius: 18px 18px 4px 18px;
 }
 [class*='messageListItem']:not([class*='vc-tg-first'])[class*='vc-own-message'] [class*='cozy'] {
-    border-radius: 16px 5px 5px 16px;
+    border-radius: 18px 4px 4px 18px;
 }
-/* tail — rotated square tucked behind the last bubble of each run */
+/* messages that mention you get an accent ring + tint (reference) */
+[class*='messageListItem'][class*='mentioned'] [class*='cozy'] {
+    box-shadow: inset 0 0 0 1.5px #7c6cff;
+}
+html[class*='theme-dark'] [class*='messageListItem'][class*='mentioned']:not([class*='vc-own-message']) [class*='cozy'] {
+    background: #5a4a1f;
+}
+html[class*='theme-light'] [class*='messageListItem'][class*='mentioned']:not([class*='vc-own-message']) [class*='cozy'] {
+    background: #fbf3d9;
+}
+/* tail — single rotated square tucked behind the last bubble of each run */
 [class*='messageListItem'][class*='vc-tg-last'] [class*='cozy']::after {
     content: "";
     position: absolute;
     z-index: -1;
-    bottom: 4px;
+    bottom: 3px;
     width: 15px;
     height: 15px;
     border-radius: 4px;
     transform: rotate(45deg);
     left: -6px;
-    background: #182533;
+    background: #262835;
 }
-html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'] [class*='cozy']::after {
+html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last']:not([class*='vc-own-message']) [class*='cozy']::after {
     background: #ffffff;
 }
 [class*='messageListItem'][class*='vc-tg-last'][class*='vc-own-message'] [class*='cozy']::after {
     left: auto;
     right: -6px;
-    background: #2b5278;
+    background: #4a3fc4;
 }
 html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class*='vc-own-message'] [class*='cozy']::after {
-    background: #e1ffc7;
+    background: #e4e0fa;
 }
 /* hide every avatar except the small sender avatar on the first bubble of a run */
 [class*='messageListItem'] [class*='avatar'] {
@@ -312,7 +330,7 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     min-width: 0;
     overflow-wrap: anywhere;
 }
-/* sender name + tag float at the top (out of flow) so the bubble hugs the text only */
+/* sender name + clan tag float at the top (out of flow) so the bubble hugs the text only */
 [class*='messageListItem']:not([class*='vc-own-message']) [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
     order: 1;
     position: static !important;
@@ -336,13 +354,34 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     text-overflow: ellipsis;
 }
 [class*='messageListItem'] [class*='header']:not([class*='embedHeader']) [class*='username'] {
-    font-size: .68rem !important;
-    font-weight: 600;
+    font-size: 13px !important;
+    font-weight: 700;
     line-height: 1.2;
     max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+/* clan-tag chiplet next to the sender name (Discord clan/guild tags) */
+[class*='messageListItem'] [class*='clanTag'],
+[class*='messageListItem'] [class*='guildTag'] {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(0,0,0,.22);
+    border-radius: 4px;
+    padding: 1px 5px 1px 3px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #a9abba;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+[class*='messageListItem'] [class*='clanTagContainer'] {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 3px;
 }
 /* the first bubble of a run makes room for the floating name + avatar */
 [class*='messageListItem']:not([class*='vc-own-message'])[class*='vc-tg-first'] [class*='cozy'] {
@@ -359,13 +398,13 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
 [class*='messageListItem'][class*='vc-own-message'] [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
     display: none !important;
 }
-/* timestamp pinned to the bottom-right corner, always inside the bubble */
+/* timestamp pinned to the bottom-left corner, always inside the bubble (reference meta) */
 [class*='messageListItem'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] {
     position: absolute !important;
     bottom: 2px !important;
-    right: 10px !important;
+    left: 10px !important;
     top: auto !important;
-    left: auto !important;
+    right: auto !important;
     z-index: 1;
     font-size: .55rem !important;
     line-height: 1;
@@ -378,9 +417,39 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
 [class*='messageListItem'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] [class*='separator'] {
     display: none !important;
 }
+/* reply-quote chip attached to the top of the bubble it belongs to (reference) */
 [class*='messageListItem'] [class*='repliedMessage'] {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,0,0,.18);
+    border-radius: 10px 10px 4px 4px;
+    padding: 5px 9px;
     margin: 0 0 3px;
+    font-size: 12px;
+    direction: ltr;
+    border-left: 2px solid #7c6cff;
     max-width: 100%;
+    min-width: 0;
+    color: #b7b9c8;
+}
+[class*='messageListItem'] [class*='repliedMessage'] [class*='username'] {
+    color: #7c6cff;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+[class*='messageListItem'] [class*='repliedMessage'] [class*='repliedTextContent'],
+[class*='messageListItem'] [class*='repliedMessage'] [class*='repliedTextPreview'] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #b7b9c8;
+}
+html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] {
+    background: rgba(0,0,0,.06);
+}
+html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] [class*='username'] {
+    color: #5b4fd0;
 }
 /* embeds, link previews and reactions go below the text */
 [class*='messageListItem'] [class*='messageAccessories'],
@@ -389,6 +458,7 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     margin-top: 4px;
     max-width: 100%;
     min-width: 0;
+    overflow: visible !important;
 }
 [class*='messageListItem'] [id^='message-accessories']:empty {
     display: none !important;
@@ -404,16 +474,24 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     max-width: 100% !important;
     height: auto !important;
 }
-/* reactions sit below the message, never overlapping the bubble */
+/* embed card fitted inside the bubble (reference) */
+[class*='messageListItem'] [class*='embed'] {
+    border-radius: 0 8px 8px 0;
+}
+/* reactions overlap the bubble's bottom edge (reference) */
 [class*='messageListItem'] [class*='messageAccessories'] > [class*='reactions'],
 [class*='messageListItem'] [id^='message-accessories'] > [class*='reactions'] {
+    position: relative;
+    z-index: 2;
     display: flex;
     flex-wrap: wrap;
-    margin-top: 4px;
+    gap: 4px;
+    margin: -9px 8px 0 4px;
 }
 [class*='messageListItem'][class*='vc-own-message'] [class*='messageAccessories'] > [class*='reactions'],
 [class*='messageListItem'][class*='vc-own-message'] [id^='message-accessories'] > [class*='reactions'] {
     justify-content: flex-end;
+    margin: -9px 4px 0 8px;
 }
 [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']) {
     border-radius: 10px;
