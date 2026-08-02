@@ -227,18 +227,44 @@ impl DohClient {
         if let Some(best) = results.first() {
             if best.avg_rtt_ms.is_some() {
                 let idx = best.index;
-                self.current_doh_index.store(idx, Ordering::Relaxed);
-                {
-                    let mut perf = self.doh_perf.write();
-                    perf[idx].blacklisted_until = 0;
+                // Keep the current server if it is close enough to the best one.
+                // RTTs on a filtered line are noisy (~5ms apart); flipping the
+                // active server on every rescan just resets per-server stats and
+                // churns the DNS cache, so only switch on a meaningful gain.
+                let curr_idx = self.current_doh_index.load(Ordering::Relaxed) % DOH_SERVERS.len();
+                let keep = results.iter().find(|r| r.index == curr_idx);
+                let mut switched = idx != curr_idx;
+                if let Some(c) = keep {
+                    if let (Some(cur_rtt), Some(best_rtt)) = (c.avg_rtt_ms, best.avg_rtt_ms) {
+                        let margin = self.config.doh_switch_margin_ms;
+                        if cur_rtt <= best_rtt + margin {
+                            switched = false;
+                            println!(
+                                "[{}] [DoH PROBE] keeping current #{} {} (RTT={:.1}ms, best={:.1}ms)",
+                                now_iso(),
+                                curr_idx,
+                                DOH_SERVERS[curr_idx],
+                                cur_rtt,
+                                best_rtt
+                            );
+                        }
+                    }
                 }
-                println!(
-                    "[{}] [DoH PROBE] selected #{} {} (avg RTT={:.1}ms)",
-                    now_iso(),
-                    idx,
-                    DOH_SERVERS[idx],
-                    best.avg_rtt_ms.unwrap_or(0.0)
-                );
+
+                if switched {
+                    self.current_doh_index.store(idx, Ordering::Relaxed);
+                    {
+                        let mut perf = self.doh_perf.write();
+                        perf[idx].blacklisted_until = 0;
+                    }
+                    println!(
+                        "[{}] [DoH PROBE] selected #{} {} (avg RTT={:.1}ms)",
+                        now_iso(),
+                        idx,
+                        DOH_SERVERS[idx],
+                        best.avg_rtt_ms.unwrap_or(0.0)
+                    );
+                }
             }
         }
 

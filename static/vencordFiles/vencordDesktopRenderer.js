@@ -172,6 +172,7 @@ code, pre, .hljs {
     width: fit-content;
     max-width: min(78%, 440px);
     min-width: 0;
+    min-height: 0 !important;
     margin: 2px auto 2px 10px;
     padding: 7px 12px 16px !important;
     box-sizing: border-box;
@@ -186,8 +187,17 @@ code, pre, .hljs {
     font-size: 15px;
     line-height: 1.4;
 }
+/* neutralize Discord's cozy left-padding variable so content starts at the bubble edge */
+[class*='messageListItem'] [class*='cozy'],
+[class*='messageListItem'] [class*='groupStart'],
+[class*='messageListItem'] [class*='contents'] {
+    --custom-message-margin-left-content-cozy: 0 !important;
+    padding-inline-start: 0 !important;
+    margin-inline-start: 0 !important;
+}
 [class*='messageListItem'] {
     overflow: visible !important;
+    min-height: 0 !important;
 }
 /* group gap: first bubble of a run gets 14px; consecutive stay tight at 2px */
 [class*='messageListItem'][class*='vc-tg-first'] [class*='cozy'] {
@@ -282,7 +292,7 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
 [class*='messageListItem'] [class*='contents'] > [class*='avatarDecoration'] {
     display: block !important;
     position: absolute !important;
-    top: 3px !important;
+    top: 7px !important;
     left: 4px !important;
     width: 18px !important;
     height: 18px !important;
@@ -330,23 +340,21 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     min-width: 0;
     overflow-wrap: anywhere;
 }
-/* sender name + clan tag float at the top (out of flow) so the bubble hugs the text only */
+/* sender name + clan tag row sits INSIDE the bubble, above the text (reference) */
 [class*='messageListItem']:not([class*='vc-own-message']) [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
     order: 1;
     position: static !important;
-    height: 0;
-    margin: 0;
+    height: auto !important;
+    min-height: 0;
+    margin: 0 0 3px;
     overflow: visible;
 }
 [class*='messageListItem']:not([class*='vc-own-message']) [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
-    position: absolute;
-    z-index: 2;
-    top: 2px;
-    left: 28px;
-    right: 0;
+    position: static !important;
     display: flex;
     align-items: baseline;
     gap: 4px;
+    padding-left: 26px;
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -383,28 +391,39 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     align-items: center;
     margin-left: 3px;
 }
-/* the first bubble of a run makes room for the floating name + avatar */
-[class*='messageListItem']:not([class*='vc-own-message'])[class*='vc-tg-first'] [class*='cozy'] {
-    padding-top: 24px !important;
-}
 /* own messages show no avatar/name; the header collapses to zero height */
 [class*='messageListItem'][class*='vc-own-message'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
     position: static !important;
-    height: 0;
-    margin: 0;
+    height: 0 !important;
+    margin: 0 !important;
     overflow: visible;
 }
 [class*='messageListItem'][class*='vc-own-message'] [class*='header']:not([class*='embedHeader']) [class*='username'],
 [class*='messageListItem'][class*='vc-own-message'] [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
     display: none !important;
 }
-/* timestamp pinned to the bottom-left corner, always inside the bubble (reference meta) */
-[class*='messageListItem'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] {
+/* timestamp pinned to the bottom corner, always inside the bubble (reference meta) */
+/* others: bottom-right; own: bottom-left (center-facing on each side) */
+[class*='messageListItem']:not([class*='vc-own-message']) [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] {
     position: absolute !important;
-    bottom: 2px !important;
-    left: 10px !important;
+    bottom: 0 !important;
+    right: 10px !important;
+    left: auto !important;
     top: auto !important;
+    z-index: 1;
+    font-size: .55rem !important;
+    line-height: 1;
+    opacity: .8 !important;
+    color: inherit;
+    direction: ltr;
+    white-space: nowrap;
+}
+[class*='messageListItem'][class*='vc-own-message'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 10px !important;
     right: auto !important;
+    top: auto !important;
     z-index: 1;
     font-size: .55rem !important;
     line-height: 1;
@@ -512,23 +531,40 @@ html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] 
 [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']):hover {
     background: rgba(255,255,255,.16);
 }
+/* hover widget: vertical toolbar (more + reactions) on the OUTER side of each bubble,
+   revealed after a short hover delay ("deadline"); for short bubbles it extends below */
 [class*='messageListItem'] [class*='buttonContainer'],
 [class*='messageListItem'] [class*='messageActions'] {
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity .15s ease;
-    background: rgba(255,255,255,.06);
+    position: absolute !important;
+    top: 8px !important;
+    left: -44px !important;
+    right: auto !important;
+    display: flex;
+    flex-direction: column !important;
+    align-items: center;
+    gap: 2px;
+    padding: 4px !important;
+    background: rgba(20,22,31,.92) !important;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,.25);
-    padding: 2px;
+    border: 1px solid rgba(255,255,255,.09) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,.35) !important;
+    z-index: 5;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .15s ease, visibility 0s linear .15s;
+}
+[class*='messageListItem'][class*='vc-own-message'] [class*='buttonContainer'],
+[class*='messageListItem'][class*='vc-own-message'] [class*='messageActions'] {
+    left: auto !important;
+    right: -44px !important;
 }
 [class*='messageListItem']:hover [class*='buttonContainer'],
 [class*='messageListItem']:hover [class*='messageActions'] {
     visibility: visible;
     opacity: 1;
+    transition: opacity .2s ease .35s, visibility 0s linear .35s;
 }
 `;function p4(e){let t=document.getElementById("vegord-rtl-css");if(e&&!t){let o=document.createElement("style");o.id="vegord-rtl-css",o.textContent=_k,document.head.appendChild(o)}else!e&&t&&t.remove()};function vgTg(e){let t=window.__vcTgObs;if(e){if(!t){let tag=()=>{let a=[...document.querySelectorAll("[class*='messageListItem']")];let isM=l=>!!l&&typeof l.className=="string"&&l.className.includes("messageListItem");let id=()=>{try{return L.getCurrentUser()?.id}catch{return null}};let ownOf=n=>{if(!n)return!1;if(typeof n.className=="string"&&n.className.includes("isAuthor"))return!0;if(n.querySelector("[class*='isAuthor']"))return!0;let k=Object.keys(n).find(c=>c.startsWith("__reactFiber$")||c.startsWith("__reactInternalInstance$"));if(!k)return!1;let f=n[k],u=id();if(!u)return!1;for(;f;f=f.return){let m=f.memoizedProps?.message;if(m&&m.author&&String(m.author.id)===String(u))return!0}return!1};a.forEach(n=>{let ow=ownOf(n);n.classList.toggle("vc-own-message",ow);let p=n.previousElementSibling,s=n.nextElementSibling,first=!isM(p)||ownOf(p)!==ow,last=!isM(s)||ownOf(s)!==ow;n.classList.toggle("vc-tg-first",first);n.classList.toggle("vc-tg-last",last);n.classList.toggle("vc-tg-only",first&&last)})};let o=()=>requestAnimationFrame(tag),n=()=>o();o();window.__vcTgObs=new MutationObserver(n);window.__vcTgObs.observe(document.body,{childList:!0,subtree:!0});window.__vcTgIv=setInterval(o,2e3)}}else{t&&(t.disconnect(),window.__vcTgObs=void 0);clearInterval(window.__vcTgIv);window.__vcTgIv=void 0;document.querySelectorAll(".vc-own-message,.vc-tg-first,.vc-tg-last,.vc-tg-only").forEach(n=>n.classList.remove("vc-own-message","vc-tg-first","vc-tg-last","vc-tg-only"))}}function m4(e){let t=document.getElementById("vegord-vazir-font-link"),o=document.getElementById("vegord-vazir-font-css");if(e&&!t){let n=document.createElement("link");n.id="vegord-vazir-font-link",n.rel="stylesheet",n.type="text/css",n.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(n);let i=document.createElement("style");i.id="vegord-vazir-font-css",i.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(i)}else e||(t&&t.remove(),o&&o.remove())}function Ek({isShown:e}){return r("svg",{viewBox:"0 0 27 27",width:18,height:18,className:"vc-toolbox-icon"},e?r("path",{fill:"currentColor",d:"M12 2C9.24 2 7 4.24 7 7c0 1.45.67 2.76 1.73 3.7L7 13v7c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-7l3.27-2.3C16.33 9.76 17 8.45 17 7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-4 7l2 1.5V16H8v-2.5l2-1.5zm8 0V16h-3v-2.5l2-1.5zM7 18v2h10v-2H7z"}):r("path",{fill:"currentColor",d:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h2v6h-2zm0 8h2v2h-2z"}))}function Ok(){let e=Oe(null),[t,o]=k(!1);return r(nn,{position:"bottom",align:"right",animation:nn.Animation.NONE,shouldShow:t,onRequestClose:()=>o(!1),targetElementRef:e,renderPopout:()=>f4(()=>o(!1))},(n,{isShown:i})=>r(Lk,{ref:e,className:"vc-toolbox-btn",onClick:()=>o(s=>!s),tooltip:i?null:"Vegord Toolbox",icon:()=>r(Ek,{isShown:i}),selected:i}))}var Ls=h({name:"vegordToolbox",description:"Adds a button to the titlebar that houses Vencord quick actions",tags:["Utility","Developers"],authors:[m.Ven,m.AutumnVN],required:!0,enabledByDefault:!0,settings:Wa,start(){p4(this.settings.store.rtlEnabled),vgTg(this.settings.store.rtlEnabled),m4(this.settings.store.vazirfontEnabled)},stop(){p4(!1),vgTg(!1),m4(!1)},patches:[{find:'?"BACK_FORWARD_NAVIGATION":',replacement:{match:/(trailing:.{0,50}?)\i\.Fragment,(?=\{children:\[)/,replace:"$1$self.TrailingWrapper,"}}],TrailingWrapper({children:e}){return r(p,null,e,r(R,{key:"vc-toolbox",noop:!0},r(Ok,null)))}});function Uk(e){return r("svg",{viewBox:"0 0 24 24",width:24,height:24,fill:"url(#heartGrad)",...e},r("defs",null,r("linearGradient",{id:"heartGrad",x1:"0",y1:"0",x2:"1",y2:"1"},r("stop",{offset:"0%",stopColor:"#8B5CF6"}),r("stop",{offset:"100%",stopColor:"#D946EF"}))),r("path",{d:"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"}))}function Bk(){let{showPluginMenu:e}=Wa.use(["showPluginMenu"]),t=_v();return e?r(C.MenuItem,{id:"plugins",label:"Plugins",action:()=>En(La)},t):null}function Fk(){let{rtlEnabled:e,vazirfontEnabled:t}=Wa.use(["rtlEnabled","vazirfontEnabled"]);return r(p,null,r(C.MenuCheckboxItem,{id:"vegord-toolbox-rtl",label:"Message Bubble",checked:e,action:()=>{let o=!e;Wa.store.rtlEnabled=o,p4(o),vgTg(o)}}),r(C.MenuCheckboxItem,{id:"vegord-toolbox-vazirfont",label:"Vazirmatn Font",checked:t,action:()=>{let o=!t;if(Wa.store.vazirfontEnabled=o,o){if(!document.getElementById("vegord-vazir-font-link")){let i=document.createElement("link");i.id="vegord-vazir-font-link",i.rel="stylesheet",i.type="text/css",i.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(i);let s=document.createElement("style");s.id="vegord-vazir-font-css",s.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(s)}}else{let n=document.getElementById("vegord-vazir-font-link");n&&n.remove();let i=document.getElementById("vegord-vazir-font-css");i&&i.remove()}}}))}function _v(e=!1){let t=Re().plugins,[o,n]=k(""),i=o.toLowerCase(),s=me(()=>Object.values(qe).sort((c,u)=>c.name.localeCompare(u.name)),[]),a=me(()=>s.filter(c=>!Ie(c.name)||c.name.endsWith("API")?!1:c.name.toLowerCase().includes(i)),[i]);return r(p,null,r(C.MenuControlItem,{id:"plugins-search",control:(c,u)=>r(C.MenuSearchControl,{...c,query:o,onChange:n,ref:u})}),r(C.MenuSeparator,null),a.map(c=>{let u=[],d=!1;if(c.settings)for(let[v,S]of Object.entries(c.settings.def)){if(Ra(c.settings,S))continue;d=!0;let b=t[c.name],y={id:`${c.name}-${v}`,key:v,label:Mn(ec(v)),disabled:Zo(c.settings,S)};switch(S.type){case 3:u.push(r(C.MenuCheckboxItem,{...y,checked:b[v],action:()=>{b[v]=!b[v],S.restartNeeded&&Ue("Restart to apply the change")}}));break;case 4:u.push(r(C.MenuItem,{...y},S.options.map(w=>r(C.MenuRadioItem,{group:`${c.name}-${v}`,id:`${c.name}-${v}-${w.value}`,key:w.label,label:w.label,checked:b[v]===w.value,action:()=>{b[v]=w.value,S.restartNeeded&&Ue("Restart to apply the change")}}))));break;case 5:if(S.stickToMarkers||S.componentProps)continue;u.push(r(C.MenuControlItem,{...y,control:(w,I)=>r(C.MenuSliderControl,{ref:I,...w,minValue:S.markers[0],maxValue:S.markers.at(-1),value:b[v],onChange:T=>b[v]=T})}));break}}let f=u.length>0;return!f&&!(e&&d)?null:r(C.MenuItem,{id:`${c.name}-menu`,key:c.name,label:c.name,action:()=>Tr(c)},f&&r(p,null,r(C.MenuGroup,{label:c.name},u),r(C.MenuSeparator,null),r(C.MenuItem,{id:`${c.name}-open`,label:"Open Settings",action:()=>Tr(c)})))}))}function $k(){return r(C.MenuItem,{id:"themes",label:"Themes",action:()=>En(Ds)},Ev())}function Ev(){let{useQuickCss:e,enabledThemes:t}=Re(["useQuickCss","enabledThemes"]),[o]=lt(VencordNative.themes.getThemesList);return r(p,null,r(C.MenuCheckboxItem,{id:"toggle-quickcss",checked:e,label:"Enable QuickCSS",action:()=>{de.useQuickCss=!e}}),r(C.MenuItem,{id:"edit-quickcss",label:"Edit QuickCSS",action:()=>VencordNative.quickCss.openEditor()}),r(C.MenuItem,{id:"manage-themes",label:"Manage Themes",action:()=>En(Ds)}),!!o?.length&&r(C.MenuGroup,null,o.map(n=>r(C.MenuCheckboxItem,{id:`theme-${n.fileName}`,key:n.fileName,label:n.name,checked:t.includes(n.fileName),action:()=>{t.includes(n.fileName)?de.enabledThemes=t.filter(i=>i!==n.fileName):de.enabledThemes=[...t,n.fileName]}}))))}function Gk(){let e=[];for(let o of Object.values(qe))if(o.toolboxActions&&Ie(o.name)){let n=typeof o.toolboxActions=="function"?o.toolboxActions():Object.entries(o.toolboxActions).map(([i,s])=>{let a=`${o.name}-${i}`;return r(C.MenuItem,{id:a,key:a,label:i,action:s})});if(!n||Array.isArray(n)&&n.length===0)continue;e.push({plugin:o,node:r(C.MenuGroup,{label:o.name,key:`${o.name}-group`},n)})}if(e.length<=5)return e.map(o=>o.node);let t=e.map(({node:o,plugin:n})=>r(C.MenuItem,{id:`${n.name}-menu`,key:`${n.name}-menu`,label:n.name,action:()=>Tr(n)},o));return r(C.MenuGroup,null,t)}function f4(e){return r(C.Menu,{navId:"vc-toolbox",onClose:e},r(C.MenuItem,{id:"vegord-donate",label:r("span",{style:{color:"#8B5CF6",backgroundColor:"#1a1a2e",textAlign:"center",display:"flex",justifyContent:"center",width:"100%",borderRadius:"6px",padding:"4px 8px"}},"Donate"),icon:Uk,action:()=>window.open("https://vergoboy.ir/donate","_blank")}),r(C.MenuItem,{id:"notifications",label:"Open Notification Log",action:_a}),Fk(),$k(),Bk(),Gk())}N();ge();ue();pe();H();x();l();(window.VencordStyles??=new Map).set("src/plugins/betterSettings/fullHeightContext.css",{name:"src/plugins/betterSettings/fullHeightContext.css",source:`/*
  * Discord has dumb max height logic for their context menus.

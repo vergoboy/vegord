@@ -1,3 +1,4 @@
+use std::cmp::Ordering as CmpOrdering;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
@@ -374,7 +375,17 @@ impl ProxyServer {
             if let Some(best_ip) = self.discord.get_best_ip() {
                 ips.push(best_ip);
             }
-            for (ip, _, _) in self.discord.get_ips_snapshot() {
+            let mut rest: Vec<IpAddr> = {
+                let mut snap = self.discord.get_ips_snapshot();
+                snap.sort_by(|a, b| match (a.1, b.1) {
+                    (Some(x), Some(y)) => x.partial_cmp(&y).unwrap_or(CmpOrdering::Equal),
+                    (Some(_), None) => CmpOrdering::Less,
+                    (None, Some(_)) => CmpOrdering::Greater,
+                    (None, None) => CmpOrdering::Equal,
+                });
+                snap.into_iter().map(|(ip, _, _)| ip).collect()
+            };
+            for ip in rest.drain(..) {
                 if !ips.contains(&ip) {
                     ips.push(ip);
                 }
@@ -393,7 +404,7 @@ impl ProxyServer {
         let addr = SocketAddr::new(ip, port);
 
         // Adjust timeout for voice/RTC connections
-        let timeout_sec = if port == 443 || port == 50001 {
+        let timeout_sec = if port == 50001 {
             self.config.voice_socket_timeout_sec
         } else {
             self.config.socket_timeout_sec
