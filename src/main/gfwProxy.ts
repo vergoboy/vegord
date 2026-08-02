@@ -99,7 +99,9 @@ function spawnProxy() {
         } else if (existsSync(script)) {
             console.log(`${logPrefix} Rust binary not found, falling back to Python script at ${script}`);
             logWarn("proxy_fallback python script");
-            proxyProcess = spawn("python3", [script], {
+            // On Windows the interpreter is usually "python", not "python3"
+            const pythonBin = process.platform === "win32" ? "python" : "python3";
+            proxyProcess = spawn(pythonBin, [script], {
                 cwd: dir,
                 stdio: ["ignore", "pipe", "pipe"],
                 env: { ...process.env, PYTHONUNBUFFERED: "1", VEGORD_PROXY_DATA_DIR: proxyDataDir }
@@ -223,7 +225,23 @@ async function freeStaleProxyPorts(): Promise<void> {
         }
     }
 
-    // Also try fuser, which handles the process-group juggling for us.
+    if (process.platform === "win32") {
+        // Windows: no ss/fuser/bash; netstat + taskkill instead.
+        // taskkill /T also kills child processes if the stale proxy respawned.
+        const pids = [...(await findPidsOnPort(PROXY_PORT)), ...(await findPidsOnPort(CONTROL_PORT))];
+        if (pids.length) {
+            try {
+                await new Promise<void>(resolve => {
+                    execFile("taskkill", ["/F", "/T", "/PID", ...pids.map(String)], () => resolve());
+                });
+            } catch {
+                // best effort
+            }
+        }
+        return;
+    }
+
+    // POSIX: fuser handles the process-group juggling for us.
     try {
         await new Promise<void>(resolve => {
             execFile("bash", ["-c", `fuser -k ${PROXY_PORT}/tcp ${CONTROL_PORT}/tcp 2>/dev/null || true`], () =>
@@ -235,7 +253,24 @@ async function freeStaleProxyPorts(): Promise<void> {
     }
 }
 
-function findPidsOnPort(port: number): Promise<number[]> {
+async function findPidsOnPort(port: number): Promise<number[]> {
+    if (process.platform === "win32") {
+        return new Promise(resolve => {
+            execFile("netstat", ["-ano"], (err, stdout) => {
+                if (err) return resolve([]);
+
+                const pids: number[] = [];
+                const portToken = new RegExp(`:${port}(\\s|$)`);
+                for (const line of stdout.split("\n")) {
+                    if (!portToken.test(line)) continue;
+                    const pid = line.trim().split(/\s+/).pop();
+                    if (pid && /^\d+$/.test(pid)) pids.push(Number(pid));
+                }
+                resolve(pids.filter(n => Number.isFinite(n) && n > 0));
+            });
+        });
+    }
+
     return new Promise(resolve => {
         execFile("ss", ["-ltnp"], (err, stdout) => {
             if (err) return resolve([]);
