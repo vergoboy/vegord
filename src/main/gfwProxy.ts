@@ -83,11 +83,12 @@ function spawnProxy() {
     const proxyDataDir = join(app.getPath("userData"), "proxy");
     mkdirSync(proxyDataDir, { recursive: true });
 
+    let child: ChildProcess | null = null;
     try {
         if (rustBinary) {
             console.log(`${logPrefix} Starting high-performance Rust proxy binary at ${rustBinary}`);
             logInfo(`proxy_start rust binary=${rustBinary}`);
-            proxyProcess = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
+            child = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
                 cwd: dirname(rustBinary),
                 stdio: ["ignore", "pipe", "pipe"],
                 env: {
@@ -101,7 +102,7 @@ function spawnProxy() {
             logWarn("proxy_fallback python script");
             // On Windows the interpreter is usually "python", not "python3"
             const pythonBin = process.platform === "win32" ? "python" : "python3";
-            proxyProcess = spawn(pythonBin, [script], {
+            child = spawn(pythonBin, [script], {
                 cwd: dir,
                 stdio: ["ignore", "pipe", "pipe"],
                 env: { ...process.env, PYTHONUNBUFFERED: "1", VEGORD_PROXY_DATA_DIR: proxyDataDir }
@@ -114,7 +115,9 @@ function spawnProxy() {
             return;
         }
 
-        proxyProcess.stdout?.on("data", (data: Buffer) => {
+        proxyProcess = child;
+
+        child.stdout?.on("data", (data: Buffer) => {
             for (const line of data.toString().trim().split("\n")) {
                 if (!line) continue;
                 console.log(`${logPrefix} ${line}`);
@@ -122,7 +125,7 @@ function spawnProxy() {
             }
         });
 
-        proxyProcess.stderr?.on("data", (data: Buffer) => {
+        child.stderr?.on("data", (data: Buffer) => {
             for (const line of data.toString().trim().split("\n")) {
                 if (line) {
                     console.error(`${logPrefix} ${line}`);
@@ -131,15 +134,18 @@ function spawnProxy() {
             }
         });
 
-        proxyProcess.on("error", err => {
+        child.on("error", err => {
             console.error(`${logPrefix} Failed to start proxy:`, err.message);
             logError(`proxy_error ${err.message}`);
+            // Only clear our reference if this is still the current child, so a
+            // fast-exiting stale child can't clobber a freshly spawned one.
+            if (proxyProcess === child) proxyProcess = null;
         });
 
-        proxyProcess.on("exit", (code, signal) => {
+        child.on("exit", (code, signal) => {
             console.log(`${logPrefix} Exited (code=${code}, signal=${signal})`);
             logWarn(`proxy_exit code=${code} signal=${signal}`);
-            proxyProcess = null;
+            if (proxyProcess === child) proxyProcess = null;
         });
 
         console.log(`${logPrefix} Started on ${PROXY_HOST}:${PROXY_PORT}`);
@@ -161,28 +167,79 @@ export function stopProxy() {
 }
 
 // The app must never run without a working proxy, so every startup verifies
-// that our proxy is actually answering before Discord is loaded. If the port
-// is held by a leftover process (e.g. an orphaned proxy from a killed
-// session) it is freed and the proxy restarted.
+// that our proxy is actually answering before Discord is loaded.
+//
+// The control-port answer is ONLY trusted when it is served by a process we
+// spawned in this app instance. A stale/orphaned proxy (e.g. from a crashed or
+// force-killed session) can still answer /status on the control port while
+// being unable to proxy any traffic — trusting it makes Discord load through a
+// dead proxy and the app look permanently broken until a manual restart.
+// Instead, an unhealthy or foreign-held port means "free it and respawn".
 export async function ensureProxyRunning(): Promise<boolean> {
-    if (await isProxyHealthy()) return true;
+    if (await isProxyReady()) return true;
 
     for (let attempt = 0; attempt < 3; attempt++) {
-        if (!proxyProcess) {
-            await freeStaleProxyPorts();
-            spawnProxy();
-        }
-
-        if (await waitForHealthy(4000)) return true;
-
-        // Proxy failed to come up (e.g. "Address already in use") — free the
-        // port and try again with a fresh process.
-        logWarn(`proxy_unhealthy attempt=${attempt + 1}`);
-        await stopProxy();
+        stopProxy();
         await freeStaleProxyPorts();
+        spawnProxy();
+        if (await waitForHealthy(4000)) return true;
+        logWarn(`proxy_unhealthy attempt=${attempt + 1}`);
     }
 
     return false;
+}
+
+// The app lives for hours and the proxy can die at any moment (network drops,
+// OOM, the stale-process scenario above, ...). Without recovery this used to
+// mean a dead Discord that needed a manual app restart. The monitor periodically
+// checks our proxy and, when it is gone or unhealthy, frees the ports, spawns a
+// fresh process and waits for it to become healthy again.
+let monitorTimer: NodeJS.Timeout | null = null;
+let shuttingDown = false;
+let recovering = false;
+
+export function startProxyMonitor(intervalMs = 10_000) {
+    if (monitorTimer) return;
+    monitorTimer = setInterval(() => {
+        void checkAndRecoverProxy();
+    }, intervalMs);
+    monitorTimer.unref?.();
+}
+
+// Called before the app exits so the monitor never respawns the proxy mid-quit.
+export function markShuttingDown() {
+    shuttingDown = true;
+    if (monitorTimer) {
+        clearInterval(monitorTimer);
+        monitorTimer = null;
+    }
+}
+
+async function checkAndRecoverProxy() {
+    if (recovering || shuttingDown) return;
+
+    const childAlive = proxyProcess !== null && proxyProcess.exitCode === null;
+    if (childAlive) {
+        if (await isProxyReady()) return;
+        // Give a still-booting proxy a moment before declaring it dead.
+        if (await waitForHealthy(3000)) return;
+    }
+
+    logWarn("proxy_unhealthy_runtime recovering");
+    recovering = true;
+    try {
+        stopProxy();
+        await freeStaleProxyPorts();
+        spawnProxy();
+        if (await waitForHealthy(4000)) {
+            console.log("[GFW Proxy] Recovered");
+            logInfo("proxy_recovered");
+        } else {
+            logWarn("proxy_recovery_failed");
+        }
+    } finally {
+        recovering = false;
+    }
 }
 
 async function isProxyHealthy(): Promise<boolean> {
@@ -196,11 +253,24 @@ async function isProxyHealthy(): Promise<boolean> {
     }
 }
 
+// The control port may answer /status even when the listener is a stale
+// orphan, not our own freshly spawned child. Only count the proxy as ready
+// when the control port is actually served by the process we spawned.
+async function isProxyServedByUs(): Promise<boolean> {
+    if (!proxyProcess || proxyProcess.exitCode !== null || proxyProcess.pid === undefined) return false;
+    const pids = await findPidsOnPort(CONTROL_PORT);
+    return pids.includes(proxyProcess.pid);
+}
+
+async function isProxyReady(): Promise<boolean> {
+    return (await isProxyHealthy()) && (await isProxyServedByUs());
+}
+
 function waitForHealthy(timeoutMs: number): Promise<boolean> {
     return new Promise(resolve => {
         const startedAt = Date.now();
         const check = async () => {
-            if (await isProxyHealthy()) return resolve(true);
+            if (await isProxyReady()) return resolve(true);
             if (Date.now() - startedAt >= timeoutMs) return resolve(false);
             setTimeout(check, 250);
         };
@@ -302,4 +372,15 @@ export function getCustomProxyAddress() {
     }
     // also check the Electron switch format
     return app.commandLine.getSwitchValue("proxy-server") || null;
+}
+
+// True only when the USER passed a custom proxy on the command line. This is
+// separate from getCustomProxyAddress() because init() appends the built-in
+// proxy via app.commandLine.appendSwitch("proxy-server", ...), which makes the
+// switch value non-empty even when no custom proxy was requested. Relying on
+// getCustomProxyAddress() there would skip ensureProxyRunning() entirely and
+// leave a dead/stale proxy undetected until a manual restart.
+export function hasCustomProxyOverride(): boolean {
+    const idx = process.argv.indexOf("--proxy-server");
+    return idx !== -1 && idx + 1 < process.argv.length;
 }

@@ -20,7 +20,16 @@ import { flushBeforeQuit, logInfo, startConnectionLog } from "./connectionLog";
 import { DATA_DIR } from "./constants";
 import { logProxyStatus } from "./dohControl";
 import { createFirstLaunchTour } from "./firstLaunch";
-import { ensureProxyRunning, getCustomProxyAddress, getProxyAddress, startProxy, stopProxy } from "./gfwProxy";
+import {
+    ensureProxyRunning,
+    getCustomProxyAddress,
+    getProxyAddress,
+    hasCustomProxyOverride,
+    markShuttingDown,
+    startProxy,
+    startProxyMonitor,
+    stopProxy
+} from "./gfwProxy";
 import { createWindows, mainWin } from "./mainWindow";
 import { registerMediaPermissionsHandler } from "./mediaPermissions";
 import { registerScreenShareHandler } from "./screenShare";
@@ -220,7 +229,7 @@ async function bootstrap() {
     // The app must never run without a working proxy. When no custom proxy is
     // given on the CLI, wait for our proxy to answer and hard-fail if it
     // cannot be started (e.g. a leftover process holding the ports).
-    if (!getCustomProxyAddress() && !(await ensureProxyRunning())) {
+    if (!hasCustomProxyOverride() && !(await ensureProxyRunning())) {
         console.error("Vegcord could not start its network proxy. Quitting because the app requires it.");
         dialog.showErrorBox(
             "Vegcord requires the GFW proxy",
@@ -231,6 +240,10 @@ async function bootstrap() {
         app.exit(1);
         return;
     }
+
+    // Watch the proxy for the whole session: if it dies or gets stuck, free
+    // the ports, respawn it and keep going — no manual restart required.
+    if (!hasCustomProxyOverride()) startProxyMonitor();
 
     if (!Object.hasOwn(State.store, "firstLaunch")) {
         createFirstLaunchTour();
@@ -247,6 +260,7 @@ app.on("open-url", (_, url) => {
 
 app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
+        markShuttingDown();
         stopProxy();
         app.quit();
     }
@@ -254,6 +268,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
     flushBeforeQuit();
+    markShuttingDown();
     stopProxy();
 });
 
