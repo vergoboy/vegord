@@ -271,25 +271,26 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
 [class*='messageListItem'] [class*='avatar'] {
     display: none !important;
 }
-[class*='messageListItem'] [class*='cozy'] > [class*='avatar'],
-[class*='messageListItem'] [class*='cozy'] > [class*='avatarDecoration'] {
+/* the sender avatar lives inside contents (first child), floating top-left of the bubble */
+[class*='messageListItem'] [class*='contents'] > [class*='avatar'],
+[class*='messageListItem'] [class*='contents'] > [class*='avatarDecoration'] {
     display: block !important;
     position: absolute !important;
-    top: 8px !important;
-    left: -20px !important;
-    width: 20px !important;
-    height: 20px !important;
+    top: 3px !important;
+    left: 4px !important;
+    width: 18px !important;
+    height: 18px !important;
     border-radius: 50% !important;
     overflow: hidden;
     pointer-events: none;
 }
-[class*='messageListItem'] [class*='cozy'] > [class*='avatarDecoration'] [class*='avatar'] {
-    width: 20px !important;
-    height: 20px !important;
+[class*='messageListItem'] [class*='contents'] > [class*='avatarDecoration'] [class*='avatar'] {
+    width: 18px !important;
+    height: 18px !important;
     border-radius: 50% !important;
 }
-[class*='messageListItem'][class*='vc-own-message'] [class*='cozy'] > [class*='avatar'],
-[class*='messageListItem'][class*='vc-own-message'] [class*='cozy'] > [class*='avatarDecoration'] {
+[class*='messageListItem'][class*='vc-own-message'] [class*='contents'] > [class*='avatar'],
+[class*='messageListItem'][class*='vc-own-message'] [class*='contents'] > [class*='avatarDecoration'] {
     display: none !important;
 }
 /* bubble content column: name on top, text in the middle, accessories below */
@@ -323,74 +324,107 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     min-width: 0;
     overflow-wrap: anywhere;
 }
-/* sender name + tag, left to right, on the first bubble of a run */
-[class*='messageListItem'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
+/* sender name + tag float at the top (out of flow) so the bubble hugs the text only */
+[class*='messageListItem']:not([class*='vc-own-message']) [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
     order: 1;
+    position: static !important;
+    height: 0;
+    margin: 0;
+    overflow: visible;
+}
+[class*='messageListItem']:not([class*='vc-own-message']) [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
+    position: absolute;
+    z-index: 2;
+    top: 2px;
+    left: 28px;
+    right: 0;
     display: flex;
     align-items: baseline;
     gap: 4px;
-    margin: 0 0 2px;
     max-width: 100%;
     min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 [class*='messageListItem'] [class*='header']:not([class*='embedHeader']) [class*='username'] {
     font-size: .68rem !important;
     font-weight: 600;
     line-height: 1.2;
-    max-width: 240px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* the first bubble of a run makes room for the floating name + avatar */
+[class*='messageListItem']:not([class*='vc-own-message'])[class*='vc-tg-first'] [class*='cozy'] {
+    padding-top: 24px !important;
+}
 /* own messages show no avatar/name; the header collapses to zero height */
 [class*='messageListItem'][class*='vc-own-message'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
+    position: static !important;
     height: 0;
     margin: 0;
     overflow: visible;
 }
-[class*='messageListItem'][class*='vc-own-message'] [class*='header']:not([class*='embedHeader']) [class*='username'] {
-    display: none;
+[class*='messageListItem'][class*='vc-own-message'] [class*='header']:not([class*='embedHeader']) [class*='username'],
+[class*='messageListItem'][class*='vc-own-message'] [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
+    display: none !important;
 }
-/* timestamp pinned to the bottom-left corner, always inside the bubble */
+/* timestamp pinned to the bottom-right corner, always inside the bubble */
 [class*='messageListItem'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] {
-    position: absolute;
-    bottom: 3px;
-    right: 10px;
+    position: absolute !important;
+    bottom: 2px !important;
+    right: 10px !important;
+    top: auto !important;
+    left: auto !important;
     z-index: 1;
     font-size: .55rem !important;
     line-height: 1;
-    opacity: .75 !important;
+    opacity: .8 !important;
     color: inherit;
     direction: ltr;
     white-space: nowrap;
+}
+/* drop the " — " separator Discord inserts before inline timestamps */
+[class*='messageListItem'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) [class*='timestamp'] [class*='separator'] {
+    display: none !important;
 }
 [class*='messageListItem'] [class*='repliedMessage'] {
     margin: 0 0 3px;
     max-width: 100%;
 }
 /* embeds, link previews and reactions go below the text */
-[class*='messageListItem'] [class*='messageAccessories'] {
+[class*='messageListItem'] [class*='messageAccessories'],
+[class*='messageListItem'] [id^='message-accessories'] {
     order: 3;
     margin-top: 4px;
     max-width: 100%;
     min-width: 0;
+}
+[class*='messageListItem'] [id^='message-accessories']:empty {
+    display: none !important;
 }
 [class*='messageListItem'] [class*='embedWrapper'] {
     min-width: 0 !important;
     max-width: 100% !important;
 }
 [class*='messageListItem'] [class*='messageAccessories'] img,
-[class*='messageListItem'] [class*='messageAccessories'] video {
+[class*='messageListItem'] [class*='messageAccessories'] video,
+[class*='messageListItem'] [id^='message-accessories'] img,
+[class*='messageListItem'] [id^='message-accessories'] video {
     max-width: 100% !important;
     height: auto !important;
 }
 /* reactions sit below the message, never overlapping the bubble */
-[class*='messageListItem'] [class*='messageAccessories'] > [class*='reactions'] {
+[class*='messageListItem'] [class*='messageAccessories'] > [class*='reactions'],
+[class*='messageListItem'] [id^='message-accessories'] > [class*='reactions'] {
     display: flex;
     flex-wrap: wrap;
     margin-top: 4px;
 }
-[class*='messageListItem'][class*='vc-own-message'] [class*='messageAccessories'] > [class*='reactions'] {
+[class*='messageListItem'][class*='vc-own-message'] [class*='messageAccessories'] > [class*='reactions'],
+[class*='messageListItem'][class*='vc-own-message'] [id^='message-accessories'] > [class*='reactions'] {
     justify-content: flex-end;
 }
 [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']) {

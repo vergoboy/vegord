@@ -1,8 +1,8 @@
 #vegord-loading {
-    --vegord-bg: light-dark(hsl(222 9% 96%), hsl(223 6.7% 20.6%));
-    --vegord-fg: light-dark(black, white);
-    --vegord-fg-semi: light-dark(rgb(0 0 0 / 0.2), rgb(255 255 255 / 0.2));
-    --vegord-fg-secondary: light-dark(#313338, #b5bac1);
+    --vegord-bg: hsl(223 6.7% 20.6%);
+    --vegord-fg: white;
+    --vegord-fg-semi: rgb(255 255 255 / 0.2);
+    --vegord-fg-secondary: #b5bac1;
 
     position: fixed;
     inset: 0;

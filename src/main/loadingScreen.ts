@@ -13,11 +13,12 @@ import { Settings } from "./settings";
 // Themed loading overlay injected into the Discord window while it loads,
 // mirroring the splash screen (blobs, spinning logo, glass panel).
 //
-// The overlay is only removed once Discord has mounted into #app-mount AND the
-// window has actually been visible for a short grace period. Basing removal on
-// "app-mount has children" alone breaks fast startups where Discord mounts
-// before the (hidden) window is shown — the overlay would vanish before the
-// user ever sees it.
+// Discord's own loading screen (the "app-spinner" element) already renders
+// inside #app-mount, so "app-mount has children" must not be treated as
+// "Discord is done loading" — otherwise the overlay would never show and the
+// user would see the stock spinner. The overlay is injected over the native
+// loading screen and only removed once the spinner is gone AND the window has
+// actually been visible for a short grace period.
 
 const OVERLAY_CSS = readFileSync(join(__dirname, "..", "..", "static", "views", "loadingOverlay.css"), "utf8");
 let OVERLAY_HTML = readFileSync(join(__dirname, "..", "..", "static", "views", "loadingOverlay.html"), "utf8");
@@ -40,7 +41,10 @@ const MIN_VISIBLE_MS = 1000;
 const INSTALL_SCRIPT = (html: string) => `(() => {
     if (document.getElementById("vegord-loading")) return "installed";
     const mount = document.getElementById("app-mount");
-    if (mount && mount.children.length > 0) return "ready";
+    // Discord's own loading screen (spinner) lives inside #app-mount, so only
+    // consider it "ready" once that spinner is gone.
+    const ready = mount && mount.children.length > 0 && !mount.querySelector("[data-testid='app-spinner']");
+    if (ready) return "ready";
     const el = document.createElement("div");
     el.id = "vegord-loading";
     el.innerHTML = ${JSON.stringify(html)};
@@ -56,7 +60,8 @@ const POLL_SCRIPT = `(() => {
     if (!el) return "gone";
     const mount = document.getElementById("app-mount");
     const since = window.__vegordLoadingVisibleSince;
-    if (mount && mount.children.length > 0 && since && Date.now() - since > ${MIN_VISIBLE_MS}) {
+    const spinner = mount && mount.querySelector("[data-testid='app-spinner']");
+    if (mount && mount.children.length > 0 && !spinner && since && Date.now() - since > ${MIN_VISIBLE_MS}) {
         el.remove();
         return "gone";
     }
