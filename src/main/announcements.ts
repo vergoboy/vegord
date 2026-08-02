@@ -48,7 +48,8 @@ async function fetchAnnouncements() {
 }
 
 function bindConsoleMessages(win: Electron.BrowserWindow) {
-    win.webContents.on("console-message", (_e, _level, msg) => {
+    win.webContents.on("console-message", event => {
+        const msg = event.message;
         if (msg === CONSOLE_DISMISS) dismiss();
         else if (msg === CONSOLE_OPEN) openUrl();
     });

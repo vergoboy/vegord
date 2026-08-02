@@ -25,6 +25,7 @@ import { createWindows, mainWin } from "./mainWindow";
 import { registerMediaPermissionsHandler } from "./mediaPermissions";
 import { registerScreenShareHandler } from "./screenShare";
 import { Settings, State } from "./settings";
+import { startSettingsSync } from "./settingsSync";
 import { startGithubUpdateChecker, startTelemetry } from "./telemetry";
 import { setAsDefaultProtocolClient } from "./utils/setAsDefaultProtocolClient";
 import { isDeckGameMode } from "./utils/steamOS";
@@ -210,6 +211,10 @@ setInterval(() => logProxyStatus("periodic"), 15 * 60 * 1000);
 
 // Persistent panel announcements (visible until the user dismisses them)
 startAnnouncements();
+
+// First-party settings sync (replaces Vencord Cloud): silently saves this
+// user's settings to the panel, restores them on the first login of the day.
+startSettingsSync();
 
 async function bootstrap() {
     // The app must never run without a working proxy. When no custom proxy is

@@ -38,7 +38,8 @@ export function createFirstLaunchTour() {
     makeLinksOpenExternally(win);
 
     loadView(win, "first-launch.html");
-    win.webContents.addListener("console-message", (_e, _l, msg) => {
+    win.webContents.addListener("console-message", event => {
+        const msg = event.message;
         if (msg === "cancel") return app.exit();
 
         if (!msg.startsWith("form:")) return;

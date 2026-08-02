@@ -53,6 +53,10 @@ export const VegcordNative = {
         setNetwork: (network: { effectiveType?: string; downlink?: number; rtt?: number }) =>
             invoke<void>(IpcEvents.TELEMETRY_SET_NETWORK, network)
     },
+    sync: {
+        setUser: (user: { id: string; username: string } | null) =>
+            invoke<void>(IpcEvents.SYNC_SET_USER, user)
+    },
     fileManager: {
         isUsingCustomVencordDir: () => sendSync<boolean>(IpcEvents.IS_USING_CUSTOM_VENCORD_DIR),
         showCustomVencordDir: () => invoke<void>(IpcEvents.SHOW_CUSTOM_VENCORD_DIR),

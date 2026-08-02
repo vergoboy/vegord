@@ -29,6 +29,7 @@ import { autoStart } from "./autoStart";
 import { enableHardwareAcceleration } from "./main";
 import { mainWin } from "./mainWindow";
 import { Settings, State } from "./settings";
+import { requestSettingsSync, startSettingsSync } from "./settingsSync";
 import { handle, handleSync } from "./utils/ipcWrappers";
 import { PopoutWindows } from "./utils/popout";
 import { isDeckGameMode, showGamePage } from "./utils/steamOS";
@@ -71,6 +72,7 @@ handle(IpcEvents.DISABLE_AUTOSTART, autoStart.disable);
 
 handle(IpcEvents.SET_SETTINGS, (_, settings: typeof Settings.store, path?: string) => {
     Settings.setData(settings, path);
+    requestSettingsSync();
 });
 
 handle(IpcEvents.RELAUNCH, async () => {

@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
 import { Settings } from "./settings";
+import { DATA_DIR } from "./constants";
 
 // Themed loading overlay injected into the Discord window while it loads,
 // mirroring the splash screen (blobs, spinning logo, glass panel).
@@ -37,6 +38,38 @@ if (existsSync(splashPath)) {
 // is allowed to disappear (in ms). Guarantees the themed loading page is
 // always noticeable, even when Discord mounted while the window was hidden.
 const MIN_VISIBLE_MS = 1000;
+
+const FACT_PLACEHOLDER = "{{FUN_FACT}}";
+
+// Fun facts are served from a JSON "database" so the pool can grow without
+// touching code. The app ships with static/funFacts.json; users can extend it
+// by dropping more facts (a plain JSON array of strings) into
+// <data dir>/funFacts.json.
+const loadFacts = (file: string): string[] => {
+    try {
+        const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+        if (Array.isArray(parsed)) {
+            return parsed.filter((fact): fact is string => typeof fact === "string" && fact.trim().length > 0);
+        }
+    } catch {}
+    return [];
+};
+
+const FUN_FACTS = [
+    ...loadFacts(join(__dirname, "..", "..", "static", "funFacts.json")),
+    ...loadFacts(join(DATA_DIR, "funFacts.json"))
+];
+
+let lastFact: string | undefined;
+
+const pickFact = () => {
+    if (FUN_FACTS.length === 0) return "Did you know? Loading screens are the internet's thinking face.";
+    if (FUN_FACTS.length === 1) return FUN_FACTS[0];
+    let fact = FUN_FACTS[Math.floor(Math.random() * FUN_FACTS.length)];
+    if (fact === lastFact) fact = FUN_FACTS[(FUN_FACTS.indexOf(fact) + 1) % FUN_FACTS.length];
+    lastFact = fact;
+    return fact;
+};
 
 const INSTALL_SCRIPT = (html: string) => `(() => {
     if (document.getElementById("vegord-loading")) return "installed";
@@ -109,7 +142,7 @@ export function themeDiscordLoadingScreen(win: BrowserWindow) {
         if (varCss) win.webContents.insertCSS(varCss).catch(() => {});
 
         win.webContents
-            .executeJavaScript(INSTALL_SCRIPT(OVERLAY_HTML))
+            .executeJavaScript(INSTALL_SCRIPT(OVERLAY_HTML.replace(FACT_PLACEHOLDER, pickFact())))
             .then(status => {
                 if (win.isDestroyed()) return;
                 if (status === "ready") return; // Discord already mounted, nothing to show

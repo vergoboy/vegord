@@ -77,4 +77,15 @@ export interface State {
     telemetry?: {
         clientId?: string;
     };
+
+    settingsSync?: {
+        pendingSecret?: string;
+        users?: Record<
+            string,
+            {
+                secret?: string;
+                lastRestoreDay?: string;
+            }
+        >;
+    };
 }
