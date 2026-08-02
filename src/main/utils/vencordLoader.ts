@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { mkdirSync } from "fs";
-import { access, constants as FsConstants, copyFile, writeFile } from "fs/promises";
+import { existsSync, mkdirSync } from "fs";
+import { copyFile, writeFile } from "fs/promises";
 import { VENCORD_FILES_DIR } from "main/vencordFilesDir";
 import { join } from "path";
 
@@ -59,10 +59,12 @@ export async function downloadVencordFiles() {
     );
 }
 
-const existsAsync = (path: string) =>
-    access(path, FsConstants.F_OK)
-        .then(() => true)
-        .catch(() => false);
+// NOTE: must use existsSync, not fs.promises.access(F_OK): in the packaged
+// app the bundled Vencord files live inside app.asar, and Electron's asar
+// support fails ENOENT for access() on asar directories (works for files and
+// for existsSync). Using access() here silently disabled the bundled vegord
+// Vencord build on Windows and fell back to downloading stock Vencord.
+const existsAsync = (path: string) => Promise.resolve(existsSync(path));
 
 export async function isValidVencordInstall(dir: string) {
     const results = await Promise.all(["package.json", ...FILES_TO_DOWNLOAD].map(f => existsAsync(join(dir, f))));
