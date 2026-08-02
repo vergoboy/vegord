@@ -1,0 +1,78 @@
+
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .stage {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .shadow {
+    position: absolute;
+    bottom: 6%;
+    left: 50%;
+    width: 55%;
+    height: 22px;
+    background: radial-gradient(ellipse, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 72%);
+    transform: translateX(-50%) scaleX(1);
+    animation: shadowPulse 1.15s cubic-bezier(.45,.05,.55,.95) infinite;
+    filter: blur(1px);
+  }
+  @keyframes shadowPulse {
+    0%   { transform: translateX(-50%) scaleX(0.85); opacity: 0.55; }
+    25%  { transform: translateX(-50%) scaleX(1.05); opacity: 0.35; }
+    50%  { transform: translateX(-50%) scaleX(0.85); opacity: 0.55; }
+    75%  { transform: translateX(-50%) scaleX(1.05); opacity: 0.35; }
+    100% { transform: translateX(-50%) scaleX(0.85); opacity: 0.55; }
+  }
+
+  .spinWrap {
+    width: 78%;
+    height: 78%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: bounce 1.15s cubic-bezier(.45,.05,.55,.95) infinite;
+  }
+  @keyframes bounce {
+    0%   { transform: translateY(0) scale(1,1); }
+    25%  { transform: translateY(-14px) scale(1.03,0.97); }
+    50%  { transform: translateY(0) scale(1,1); }
+    75%  { transform: translateY(-14px) scale(1.03,0.97); }
+    100% { transform: translateY(0) scale(1,1); }
+  }
+
+  .logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    transform-origin: 50% 50%;
+    animation: spin 1.15s cubic-bezier(.45,.05,.55,.95) infinite;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,0.18));
+  }
+  @keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 4px solid transparent;
+    border-top-color: rgba(90,90,90,0.55);
+    border-right-color: rgba(90,90,90,0.2);
+    animation: ringspin 1.15s linear infinite;
+  }
+  @keyframes ringspin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }

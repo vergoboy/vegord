@@ -6,21 +6,8 @@
 
     <link rel="stylesheet" href="./common.css" type="text/css" />
 
-    <style>
-        body {
-            padding: 2em;
-        }
+    <link rel="stylesheet" href="./about.css" type="text/css" />
 
-        h1 {
-            text-align: center;
-        }
-
-        ul {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5em;
-        }
-    </style>
 </head>
 
 <body>
@@ -86,24 +73,4 @@
     </section>
 </body>
 
-<script>
-    const data = new URLSearchParams(location.search);
-
-    // replace all {{FOO}} placeholders in the document with the values from the URL
-
-    /** @param {Node} [node] */
-    function walk(node) {
-        if (node.nodeType === Node.TEXT_NODE) {
-            node.textContent = node.textContent.replace(/{{(\w+)}}/g, (match, key) => data.get(key) || match);
-            return;
-        }
-
-        if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== "SCRIPT") {
-            for (const child of node.childNodes) {
-                walk(child);
-            }
-        }
-    }
-
-    walk(document.body);
-</script>
+<script src="./about.js"></script>
