@@ -144,6 +144,11 @@ function init() {
             if (mainWin.isMinimized()) mainWin.restore();
             if (!mainWin.isVisible()) mainWin.show();
             mainWin.focus();
+        } else {
+            // The first instance is alive but has no window (still booting, or
+            // a leftover/tray instance). Surface the app instead of silently
+            // doing nothing, so relaunching always brings a window up.
+            createWindows();
         }
     });
 
@@ -177,7 +182,11 @@ if (!app.requestSingleInstanceLock({ IS_DEV })) {
         console.log("Vegcord is already running. Quitting previous instance...");
         init();
     } else {
-        console.log("Vegcord is already running. Quitting...");
+        console.log(
+            "Vegcord is already running (another instance holds the app lock). Quitting...\n" +
+                "If no Vegcord window appears, an instance is likely still running in the system tray.\n" +
+                "Close it via the tray icon, or run: taskkill /F /IM vegord.exe"
+        );
         app.quit();
     }
 } else {
