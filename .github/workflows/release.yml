@@ -47,7 +47,14 @@ jobs:
             - name: Run Electron Builder
               if: ${{ matrix.platform == 'mac' }}
               run: |
-                  pnpm electron-builder --${{ matrix.platform }} --publish always --config.mac.notarize=false
+                  pnpm electron-builder --${{ matrix.platform }} --publish always --config.mac.notarize=false 2>&1 | tee /tmp/eb.log
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+            - name: Upload electron-builder log
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: mac-eb-log
+                  path: /tmp/eb.log
