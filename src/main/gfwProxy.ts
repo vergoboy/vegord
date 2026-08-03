@@ -13,6 +13,13 @@ import { logError, logInfo, logWarn } from "./connectionLog";
 
 let proxyProcess: ChildProcess | null = null;
 
+// The child that confirmed it bound the control port, by printing
+// "[CTRL] control server listening on 127.0.0.1:<port>". The Rust proxy only
+// prints that line AFTER TcpListener::bind succeeded, so it is an authoritative
+// "we own the control port" signal that works even where the netstat PID lookup
+// is unreliable (Windows).
+let controlBindConfirmedBy: ChildProcess | null = null;
+
 // Last-known startup failure details, surfaced to the user in the "Vegcord
 // requires the GFW proxy" dialog so the reason is actionable instead of a
 // generic "could not start its network proxy".
@@ -94,6 +101,9 @@ function spawnProxy() {
     const proxyDataDir = join(app.getPath("userData"), "proxy");
     mkdirSync(proxyDataDir, { recursive: true });
 
+    // A new child has not (yet) confirmed it bound the control port.
+    controlBindConfirmedBy = null;
+
     let child: ChildProcess | null = null;
     try {
         if (rustBinary) {
@@ -132,6 +142,7 @@ function spawnProxy() {
             for (const line of data.toString().trim().split("\n")) {
                 if (!line) continue;
                 console.log(`${logPrefix} ${line}`);
+                if (line.includes("[CTRL] control server listening")) controlBindConfirmedBy = child;
                 if (PROXY_LOG_MARKERS.some(m => line.includes(m))) logInfo(`proxy ${line.trim()}`);
             }
         });
@@ -231,6 +242,7 @@ async function describeProxyState(): Promise<string> {
     }
     bits.push(`healthy=${await isProxyHealthy()}`);
     bits.push(`servedByUs=${await isProxyServedByUs()}`);
+    bits.push(`ctrlConfirmed=${controlBindConfirmedBy === proxyProcess}`);
     bits.push(`controlPortPids=[${(await findPidsOnPort(CONTROL_PORT)).join(",")}]`);
     bits.push(`proxyPortPids=[${(await findPidsOnPort(PROXY_PORT)).join(",")}]`);
     return bits.join(" ");
@@ -310,7 +322,18 @@ async function isProxyServedByUs(): Promise<boolean> {
 }
 
 async function isProxyReady(): Promise<boolean> {
-    return (await isProxyHealthy()) && (await isProxyServedByUs());
+    if (!(await isProxyHealthy())) return false;
+    // Primary ownership signal: our own child printed "[CTRL] control server
+    // listening", which the Rust proxy emits only after binding the control
+    // port. Cheap and works everywhere, including Windows where the netstat
+    // PID lookup below is unreliable (it used to report servedByUs=false even
+    // when our child was serving /status, causing a working proxy to be killed
+    // and the app to hard-fail on startup).
+    if (controlBindConfirmedBy === proxyProcess && proxyProcess !== null && proxyProcess.exitCode === null) {
+        return true;
+    }
+    // Fallback: match the control-port listener PID against our spawned child.
+    return isProxyServedByUs();
 }
 
 function waitForHealthy(timeoutMs: number): Promise<boolean> {
