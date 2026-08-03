@@ -13,6 +13,17 @@ import { logError, logInfo, logWarn } from "./connectionLog";
 
 let proxyProcess: ChildProcess | null = null;
 
+// Last-known startup failure details, surfaced to the user in the "Vegcord
+// requires the GFW proxy" dialog so the reason is actionable instead of a
+// generic "could not start its network proxy".
+let lastSpawnError: string | null = null;
+let lastChildExit: string | null = null;
+let lastDiagnostics: string | null = null;
+
+export function getLastProxyDiagnostics(): string | null {
+    return lastDiagnostics;
+}
+
 const PROXY_PORT = 4500;
 const PROXY_HOST = "127.0.0.1";
 const CONTROL_PORT = 4501;
@@ -135,6 +146,7 @@ function spawnProxy() {
         });
 
         child.on("error", err => {
+            lastSpawnError = err.message;
             console.error(`${logPrefix} Failed to start proxy:`, err.message);
             logError(`proxy_error ${err.message}`);
             // Only clear our reference if this is still the current child, so a
@@ -143,8 +155,9 @@ function spawnProxy() {
         });
 
         child.on("exit", (code, signal) => {
-            console.log(`${logPrefix} Exited (code=${code}, signal=${signal})`);
-            logWarn(`proxy_exit code=${code} signal=${signal}`);
+            lastChildExit = `code=${code} signal=${signal}`;
+            console.log(`${logPrefix} Exited (${lastChildExit})`);
+            logWarn(`proxy_exit ${lastChildExit}`);
             if (proxyProcess === child) proxyProcess = null;
         });
 
@@ -178,15 +191,49 @@ export function stopProxy() {
 export async function ensureProxyRunning(): Promise<boolean> {
     if (await isProxyReady()) return true;
 
+    const attempts: string[] = [];
     for (let attempt = 0; attempt < 3; attempt++) {
         stopProxy();
         await freeStaleProxyPorts();
         spawnProxy();
-        if (await waitForHealthy(4000)) return true;
-        logWarn(`proxy_unhealthy attempt=${attempt + 1}`);
+        if (await waitForHealthy(4000)) {
+            logInfo("proxy_healthy_after_retry");
+            return true;
+        }
+        attempts.push(`attempt=${attempt + 1}: ${await describeProxyState()}`);
+        logWarn(`proxy_unhealthy ${attempts[attempts.length - 1]}`);
     }
 
+    lastDiagnostics = attempts.join(" | ");
+    console.error(`[GFW Proxy] Failed to become healthy: ${lastDiagnostics}`);
+    logError(`proxy_start_failed ${lastDiagnostics}`);
     return false;
+}
+
+// Best-effort snapshot of why the proxy is not ready, so the failure dialog and
+// connection log carry the actual reason (spawn error, immediate exit, control
+// port not answering, or a PID/port mismatch) instead of a generic message.
+async function describeProxyState(): Promise<string> {
+    const bits: string[] = [];
+    if (lastSpawnError) {
+        bits.push(`spawnError=${lastSpawnError}`);
+        lastSpawnError = null;
+    }
+    if (lastChildExit) {
+        bits.push(`exit=${lastChildExit}`);
+        lastChildExit = null;
+    }
+    if (proxyProcess) {
+        bits.push(`childPid=${proxyProcess.pid ?? "?"}`);
+        if (proxyProcess.exitCode !== null) bits.push(`childExitCode=${proxyProcess.exitCode}`);
+    } else {
+        bits.push("child=gone");
+    }
+    bits.push(`healthy=${await isProxyHealthy()}`);
+    bits.push(`servedByUs=${await isProxyServedByUs()}`);
+    bits.push(`controlPortPids=[${(await findPidsOnPort(CONTROL_PORT)).join(",")}]`);
+    bits.push(`proxyPortPids=[${(await findPidsOnPort(PROXY_PORT)).join(",")}]`);
+    return bits.join(" ");
 }
 
 // The app lives for hours and the proxy can die at any moment (network drops,

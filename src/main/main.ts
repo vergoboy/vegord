@@ -23,6 +23,7 @@ import { createFirstLaunchTour } from "./firstLaunch";
 import {
     ensureProxyRunning,
     getCustomProxyAddress,
+    getLastProxyDiagnostics,
     getProxyAddress,
     hasCustomProxyOverride,
     markShuttingDown,
@@ -230,12 +231,18 @@ async function bootstrap() {
     // given on the CLI, wait for our proxy to answer and hard-fail if it
     // cannot be started (e.g. a leftover process holding the ports).
     if (!hasCustomProxyOverride() && !(await ensureProxyRunning())) {
+        const diagnostics = getLastProxyDiagnostics();
         console.error("Vegcord could not start its network proxy. Quitting because the app requires it.");
+        if (diagnostics) console.error("Proxy diagnostics:", diagnostics);
+        // The proxy folder path is platform-specific; on Windows the Linux
+        // path (~/.config/...) is wrong and only confuses the user.
+        const proxyDataDir = join(app.getPath("userData"), "proxy");
         dialog.showErrorBox(
             "Vegcord requires the GFW proxy",
             "Vegcord could not start its network proxy, so the app cannot run.\n\n" +
+                (diagnostics ? `Details: ${diagnostics}\n\n` : "") +
                 "Please make sure no leftover Vegcord process is running and try again.\n\n" +
-                "If the error persists, delete ~/.config/vegord/proxy and restart."
+                `If the error persists, delete the proxy folder "${proxyDataDir}" and restart.`
         );
         app.exit(1);
         return;
