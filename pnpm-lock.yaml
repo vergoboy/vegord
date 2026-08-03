@@ -70,9 +70,9 @@ importers:
       eslint-plugin-unused-imports:
         specifier: ^4.4.1
         version: 4.4.1(@typescript-eslint/eslint-plugin@8.62.1(@typescript-eslint/parser@8.62.1(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.6.0(jiti@2.7.0))
-      libvesktop:
-        specifier: link:packages/libvesktop
-        version: link:packages/libvesktop
+      libvegord:
+        specifier: link:packages/libvegord
+        version: link:packages/libvegord
       prettier:
         specifier: ^3.9.4
         version: 3.9.4
@@ -98,6 +98,15 @@ importers:
       '@vencord/venmic':
         specifier: ^7.1.0
         version: 7.1.0
+
+  packages/libvegord:
+    devDependencies:
+      node-addon-api:
+        specifier: ^8.5.0
+        version: 8.9.0
+      node-gyp:
+        specifier: ^11.4.2
+        version: 11.5.0
 
   packages/libvesktop:
     devDependencies:
@@ -675,7 +684,7 @@ packages:
     engines: {node: '>= 0.4'}
 
   arrpc@https://codeload.github.com/OpenAsar/arrpc/tar.gz/2234e9c9111f4c42ebcc3aa6a2215bfd979eef77:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/OpenAsar/arrpc/tar.gz/2234e9c9111f4c42ebcc3aa6a2215bfd979eef77}
+    resolution: {gitHosted: true, integrity: sha512-N5Pmu/oIOozSEynkAVvglxZWGazXQ8J0MfnlhCnzydHGcdthFGeIoMP6UIxrGnlwohpLEHb0k+9yrZiHMZIpsg==, tarball: https://codeload.github.com/OpenAsar/arrpc/tar.gz/2234e9c9111f4c42ebcc3aa6a2215bfd979eef77}
     version: 3.5.0
     hasBin: true
 
