@@ -3,7 +3,7 @@
 # NOTE: Run pnpm build first
 
 pkgname=vegord-gfw-proxy
-pkgver=1.7.1
+pkgver=1.7.2
 pkgrel=1
 pkgdesc="Vegcord - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
 arch=('x86_64' 'aarch64')
