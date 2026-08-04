@@ -5,13 +5,20 @@
  */
 
 /*
- * Vegcord: "More" chat bar button + "Upload Vegord" + emoji-picker footer icons.
+ * Vegcord: "More" chat bar button + "Upload Vegord" + emoji-picker tab icons.
  *
  * Pure DOM implementation. It deliberately avoids Vencord's ChatButtons API: the
  * _injectButtons patch no longer matches modern Discord's chat bar, so buttons
  * registered via addChatBarButton are silently never rendered. Instead the ⋮
- * button is injected straight into the chat bar DOM with a MutationObserver and
- * works regardless of how Discord renders its input area.
+ * button is injected straight into the chat bar DOM and the expression-picker
+ * tabs get clones of Discord's own chat bar icons (the GIF/sticker/gift/apps
+ * buttons are hidden once our ⋮ button is present).
+ *
+ * The renderer runs from the preload (webFrame.executeJavaScript) before
+ * Discord's real document exists, so a MutationObserver attached once to
+ * documentElement dies with the initial document. A poller therefore
+ * re-attaches the observer to the live document on every tick and also scans
+ * on a timer, so injection works regardless of when Discord renders its UI.
  */
 
 type UploadState =
@@ -235,7 +242,7 @@ function toggleMenu() {
     renderMenu();
 }
 
-/* -------------------------- chat bar button -------------------------- */
+/* ------------------------- chat bar button ------------------------- */
 
 function injectButton(chatBar: HTMLElement) {
     if (chatBar.querySelector(`#${MORE_BUTTON_ID}`)) return;
@@ -267,58 +274,67 @@ function scanChatBar() {
     if (chatBar) injectButton(chatBar);
 }
 
-(function initChatBarButton() {
-    let scheduled = false;
-    const scan = () => {
-        scheduled = false;
-        if (document.getElementById(MORE_BUTTON_ID)) return;
-        scanChatBar();
-    };
-    new MutationObserver(() => {
-        if (scheduled) return;
-        scheduled = true;
-        setTimeout(scan, 150);
-    }).observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(scan, 500);
-})();
+/* ------------------- emoji picker tab icons ------------------- */
 
-/* --------------------- emoji picker footer icons --------------------- */
-
-const FOOTER_ICONS: Record<string, string> = {
-    emoji: "\ud83d\ude0a",
-    gif: "\ud83c\udfac",
-    sticker: "\ud83c\udff7\ufe0f"
+const TAB_CHAT_BAR_LABELS: Record<string, string> = {
+    emoji: "Open emoji picker",
+    gif: "Open GIF picker",
+    sticker: "Open sticker picker"
 };
 
-function decorateEmojiPickerFooter() {
-    const picker = document.querySelector<HTMLElement>('[class*="emojiPicker"]');
-    if (!picker) return;
-    const scope = (picker.querySelector<HTMLElement>('[class*="footer"]') ?? picker) as HTMLElement;
-    scope.querySelectorAll<HTMLElement>("button").forEach(btn => {
-        if (btn.dataset.vegordFooterIcon) return;
-        const label = (btn.getAttribute("aria-label") || btn.textContent || "").trim().toLowerCase();
-        if (label.length > 24) return;
-        const key = Object.keys(FOOTER_ICONS).find(k => label === k || label.includes(k));
-        if (!key) return;
-        btn.dataset.vegordFooterIcon = "1";
-        const span = document.createElement("span");
-        span.textContent = FOOTER_ICONS[key];
-        span.style.cssText = "margin-right:6px;font-size:16px;line-height:1;";
-        btn.prepend(span);
-    });
+function tabSvgFromChatBar(kind: string): SVGSVGElement | null {
+    const btn = document.querySelector<HTMLElement>(`[aria-label="${TAB_CHAT_BAR_LABELS[kind]}"]`);
+    return btn?.querySelector<SVGSVGElement>("svg") ?? null;
 }
 
-(function initEmojiFooterIcons() {
-    let scheduled = false;
-    const scan = () => {
-        scheduled = false;
-        if (!document.querySelector('[class*="emojiPicker"]')) return;
-        decorateEmojiPickerFooter();
+function decorateEmojiPickerTabs() {
+    const picker = document.querySelector<HTMLElement>('[class*="emojiPicker"]');
+    if (!picker) return;
+    for (const kind of ["emoji", "gif", "sticker"]) {
+        const tab = picker.querySelector<HTMLElement>(`#${kind}-picker-tab`);
+        if (!tab || tab.dataset.vegordTabIcon) continue;
+        const icon = tabSvgFromChatBar(kind);
+        if (!icon) continue;
+        tab.dataset.vegordTabIcon = "1";
+        tab.setAttribute("aria-label", (tab.textContent || kind).trim());
+        tab.textContent = "";
+        icon.style.width = "20px";
+        icon.style.height = "20px";
+        icon.style.display = "block";
+        tab.appendChild(icon);
+    }
+}
+
+/* --------------------- self-healing poller --------------------- */
+
+let observedRoot: Node | null = null;
+let pendingTick = false;
+
+function tick() {
+    pendingTick = false;
+    scanChatBar();
+    if (document.querySelector('[class*="emojiPicker"]')) decorateEmojiPickerTabs();
+}
+
+function scheduleTick() {
+    if (pendingTick) return;
+    pendingTick = true;
+    setTimeout(tick, 120);
+}
+
+(function initPoller() {
+    const observer = new MutationObserver(scheduleTick);
+    const ensureObserving = () => {
+        const root = document.documentElement;
+        if (root && root !== observedRoot) {
+            observedRoot = root;
+            observer.observe(root, { childList: true, subtree: true });
+        }
     };
-    new MutationObserver(() => {
-        if (scheduled) return;
-        scheduled = true;
-        setTimeout(scan, 200);
-    }).observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(scan, 1000);
+    setInterval(() => {
+        ensureObserving();
+        tick();
+    }, 800);
+    ensureObserving();
+    scheduleTick();
 })();

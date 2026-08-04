@@ -62,13 +62,15 @@ body.vegord-has-more-button [class*="channelTextArea"] [aria-label="Apps"] {
     display: none !important;
 }
 
-/* Expression picker tabs: since the GIF/sticker chat bar buttons are gone, add
-   an icon next to each tab label so the entry point is still obvious. */
+/* Expression picker tabs: the vegordChatMenu patch replaces each tab's label
+   with the exact icon from the matching chat bar button, so keep the tab a
+   centered flex box (the icon is an inline SVG) with a hover highlight. */
 #emoji-picker-tab,
 #gif-picker-tab,
 #sticker-picker-tab {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     border-radius: 6px;
     transition: background-color 0.15s ease;
 }
@@ -76,23 +78,6 @@ body.vegord-has-more-button [class*="channelTextArea"] [aria-label="Apps"] {
 #gif-picker-tab:hover,
 #sticker-picker-tab:hover {
     background: var(--background-modifier-hover);
-}
-#emoji-picker-tab::before,
-#gif-picker-tab::before,
-#sticker-picker-tab::before {
-    font-family: "Twemoji Mozilla", var(--font-primary);
-    font-size: 1.25em;
-    line-height: 1;
-    margin-right: 4px;
-}
-#emoji-picker-tab::before {
-    content: "\1F60A";
-}
-#gif-picker-tab::before {
-    content: "\1F3AC";
-}
-#sticker-picker-tab::before {
-    content: "\1F5BC";
 }
 
 /* Emoji picker UX: hover feedback on the emoji grid, rounded hover on the
