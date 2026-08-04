@@ -229,6 +229,11 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-own-message'] [
 [class*='messageListItem'][class*='vc-own-message'] [class*='groupStart'] {
     margin: 2px 10px 2px auto;
 }
+/* own bubbles always keep enough room to show the pinned time */
+[class*='messageListItem'][class*='vc-own-message'] [class*='cozy'],
+[class*='messageListItem'][class*='vc-own-message'] [class*='groupStart'] {
+    min-width: 64px;
+}
 /* one clean border-radius rule per position (reference: tail corner is tight) */
 /* others: tail corner = bottom-left tight */
 [class*='messageListItem'][class*='vc-tg-first']:not([class*='vc-own-message']) [class*='cozy'],
@@ -284,12 +289,12 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
 [class*='messageListItem'] [class*='avatar'] {
     display: none !important;
 }
-/* the sender avatar lives inside contents (first child), floating top-left of the bubble */
-[class*='messageListItem'] [class*='contents'] > [class*='avatar'],
-[class*='messageListItem'] [class*='contents'] > [class*='avatarDecoration'] {
+/* the sender avatar lives inside contents (first child), aligned with the in-bubble name row */
+[class*='messageListItem'][class*='vc-tg-first']:not([class*='vc-own-message']) [class*='contents'] > [class*='avatar'],
+[class*='messageListItem'][class*='vc-tg-first']:not([class*='vc-own-message']) [class*='contents'] > [class*='avatarDecoration'] {
     display: block !important;
     position: absolute !important;
-    top: 3px !important;
+    top: 7px !important;
     left: 4px !important;
     width: 18px !important;
     height: 18px !important;
@@ -297,7 +302,7 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     overflow: hidden;
     pointer-events: none;
 }
-[class*='messageListItem'] [class*='contents'] > [class*='avatarDecoration'] [class*='avatar'] {
+[class*='messageListItem'][class*='vc-tg-first']:not([class*='vc-own-message']) [class*='contents'] > [class*='avatarDecoration'] [class*='avatar'] {
     width: 18px !important;
     height: 18px !important;
     border-radius: 50% !important;
@@ -337,20 +342,20 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     min-width: 0;
     overflow-wrap: anywhere;
 }
-/* sender name + clan tag float at the top (out of flow) so the bubble hugs the text only */
-[class*='messageListItem']:not([class*='vc-own-message']) [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
+/* sender name + clan tag live INSIDE the bubble, in-flow, only on the first bubble of a run (reference) */
+[class*='messageListItem']:not([class*='vc-own-message'])[class*='vc-tg-first'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
     order: 1;
     position: static !important;
-    height: 0;
-    margin: 0;
-    overflow: visible;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: auto;
+    margin: 0 0 3px;
+    padding-left: 28px;
+    max-width: 100%;
+    direction: ltr;
 }
-[class*='messageListItem']:not([class*='vc-own-message']) [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
-    position: absolute;
-    z-index: 2;
-    top: 2px;
-    left: 28px;
-    right: 0;
+[class*='messageListItem']:not([class*='vc-own-message'])[class*='vc-tg-first'] [class*='header']:not([class*='embedHeader']) [class*='headerText'] {
     display: flex;
     align-items: baseline;
     gap: 4px;
@@ -359,6 +364,13 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+}
+/* grouped continuation bubbles keep the name row collapsed to zero height */
+[class*='messageListItem']:not([class*='vc-own-message']):not([class*='vc-tg-first']) [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
+    position: static !important;
+    height: 0;
+    margin: 0;
+    overflow: visible;
 }
 [class*='messageListItem'] [class*='header']:not([class*='embedHeader']) [class*='username'] {
     font-size: 13px !important;
@@ -389,10 +401,6 @@ html[class*='theme-light'] [class*='messageListItem'][class*='vc-tg-last'][class
     display: inline-flex;
     align-items: center;
     margin-left: 3px;
-}
-/* the first bubble of a run makes room for the floating name + avatar */
-[class*='messageListItem']:not([class*='vc-own-message'])[class*='vc-tg-first'] [class*='cozy'] {
-    padding-top: 24px !important;
 }
 /* own messages show no avatar/name; the header collapses to zero height */
 [class*='messageListItem'][class*='vc-own-message'] [class*='contents'] > [class*='header']:not([class*='embedHeader']) {
@@ -476,6 +484,15 @@ html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] 
 html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] [class*='username'] {
     color: #5b4fd0;
 }
+/* reply-chip hover is disabled: no fake highlight on the original message, no bubble growth */
+[class*='messageListItem'] [class*='repliedMessage'] {
+    pointer-events: none !important;
+    transition: none !important;
+}
+/* the buggy "Jump To Reply" spine overlay is removed entirely */
+[class*='messageListItem'] [class*='repliedMessageClickableSpine'] {
+    display: none !important;
+}
 /* embeds, link previews and reactions go below the text */
 [class*='messageListItem'] [class*='messageAccessories'],
 [class*='messageListItem'] [id^='message-accessories'] {
@@ -511,31 +528,52 @@ html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] 
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin: -9px 8px 0 4px;
+    margin: -9px 4px 0;
 }
 [class*='messageListItem'][class*='vc-own-message'] [class*='messageAccessories'] > [class*='reactions'],
 [class*='messageListItem'][class*='vc-own-message'] [id^='message-accessories'] > [class*='reactions'] {
     justify-content: flex-end;
-    margin: -9px 4px 0 8px;
 }
 [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     border-radius: 10px;
-    background: rgba(255,255,255,.08);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,.06);
+    background: #1c1e27;
+    border: 1.5px solid #15161d;
     padding: 1px 6px;
+    font-size: 12px;
+    color: #c7c9d6;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,.3));
+}
+html[class*='theme-light'] [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']) {
+    background: #ffffff;
+    border-color: rgba(0,0,0,.12);
+    color: #1c1633;
+}
+[class*='messageListItem'] [class*='reaction'][class*='reactionMe']:not([class*='reactionCount']):not([class*='reactionBtn']) {
+    background: rgba(124,108,255,.18);
+    border-color: #7c6cff;
+    color: #7c6cff;
+}
+html[class*='theme-light'] [class*='messageListItem'] [class*='reaction'][class*='reactionMe']:not([class*='reactionCount']):not([class*='reactionBtn']) {
+    color: #5b4fd0;
 }
 [class*='messageListItem'] [class*='reaction'] img {
     width: 14px !important;
     height: 14px !important;
 }
 [class*='messageListItem'] [class*='reactionCount'] {
-    font-size: .6rem !important;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-weight: 600;
+    font-size: 12px;
     line-height: 1;
 }
 [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']):hover {
-    background: rgba(255,255,255,.16);
+    background: rgba(255,255,255,.12);
+}
+html[class*='theme-light'] [class*='messageListItem'] [class*='reaction']:not([class*='reactionCount']):not([class*='reactionBtn']):hover {
+    background: rgba(0,0,0,.06);
 }
 [class*='messageListItem'] [class*='buttonContainer'],
 [class*='messageListItem'] [class*='messageActions'] {
@@ -555,7 +593,18 @@ html[class*='theme-light'] [class*='messageListItem'] [class*='repliedMessage'] 
     visibility: visible;
     opacity: 1;
 }
-`;function p4(e){let t=document.getElementById("vegord-rtl-css");if(e&&!t){let o=document.createElement("style");o.id="vegord-rtl-css",o.textContent=_k,document.head.appendChild(o)}else!e&&t&&t.remove()};function vgTg(e){let t=window.__vcTgObs;if(e){if(!t){let tag=()=>{let a=[...document.querySelectorAll("[class*='messageListItem']")];let isM=l=>!!l&&typeof l.className=="string"&&l.className.includes("messageListItem");let id=()=>{try{return L.getCurrentUser()?.id}catch{return null}};let authorOf=n=>{if(!n)return null;if(typeof n.className=="string"&&n.className.includes("isAuthor"))return{key:"__own",own:!0};if(n.querySelector?.("[class*='isAuthor']"))return{key:"__own",own:!0};let k=Object.keys(n).find(c=>c.startsWith("__reactFiber$")||c.startsWith("__reactInternalInstance$"));if(!k)return null;let f=n[k],u=id();for(;f;f=f.return){let m=f.memoizedProps?.message;if(m&&m.author){let au=m.author;return{key:String(au.id??au.username??""),own:!!u&&String(au.id)===String(u)}}}return null};a.forEach(n=>{let au=authorOf(n),key=au&&au.key,ow=!!(au&&au.own);n.classList.toggle("vc-own-message",ow);let p=n.previousElementSibling,s=n.nextElementSibling,a1=authorOf(p),a2=authorOf(s),first=!isM(p)||!key||!a1||a1.key!==key,last=!isM(s)||!key||!a2||a2.key!==key;n.classList.toggle("vc-tg-first",first);n.classList.toggle("vc-tg-last",last);n.classList.toggle("vc-tg-only",first&&last)})};let o=()=>requestAnimationFrame(tag),n=()=>o();o();window.__vcTgObs=new MutationObserver(n);window.__vcTgObs.observe(document.body,{childList:!0,subtree:!0});window.__vcTgIv=setInterval(o,2e3)}}else{t&&(t.disconnect(),window.__vcTgObs=void 0);clearInterval(window.__vcTgIv);window.__vcTgIv=void 0;document.querySelectorAll(".vc-own-message,.vc-tg-first,.vc-tg-last,.vc-tg-only").forEach(n=>n.classList.remove("vc-own-message","vc-tg-first","vc-tg-last","vc-tg-only"))}}function m4(e){let t=document.getElementById("vegord-vazir-font-link"),o=document.getElementById("vegord-vazir-font-css");if(e&&!t){let n=document.createElement("link");n.id="vegord-vazir-font-link",n.rel="stylesheet",n.type="text/css",n.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(n);let i=document.createElement("style");i.id="vegord-vazir-font-css",i.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(i)}else e||(t&&t.remove(),o&&o.remove())}function Ek({isShown:e}){return r("svg",{viewBox:"0 0 27 27",width:18,height:18,className:"vc-toolbox-icon"},e?r("path",{fill:"currentColor",d:"M12 2C9.24 2 7 4.24 7 7c0 1.45.67 2.76 1.73 3.7L7 13v7c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-7l3.27-2.3C16.33 9.76 17 8.45 17 7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-4 7l2 1.5V16H8v-2.5l2-1.5zm8 0V16h-3v-2.5l2-1.5zM7 18v2h10v-2H7z"}):r("path",{fill:"currentColor",d:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h2v6h-2zm0 8h2v2h-2z"}))}function Ok(){let e=Oe(null),[t,o]=k(!1);return r(nn,{position:"bottom",align:"right",animation:nn.Animation.NONE,shouldShow:t,onRequestClose:()=>o(!1),targetElementRef:e,renderPopout:()=>f4(()=>o(!1))},(n,{isShown:i})=>r(Lk,{ref:e,className:"vc-toolbox-btn",onClick:()=>o(s=>!s),tooltip:i?null:"Vegord Toolbox",icon:()=>r(Ek,{isShown:i}),selected:i}))}var Ls=h({name:"vegordToolbox",description:"Adds a button to the titlebar that houses Vencord quick actions",tags:["Utility","Developers"],authors:[m.Ven,m.AutumnVN],required:!0,enabledByDefault:!0,settings:Wa,start(){p4(this.settings.store.rtlEnabled),vgTg(this.settings.store.rtlEnabled),m4(this.settings.store.vazirfontEnabled)},stop(){p4(!1),vgTg(!1),m4(!1)},patches:[{find:'?"BACK_FORWARD_NAVIGATION":',replacement:{match:/(trailing:.{0,50}?)\i\.Fragment,(?=\{children:\[)/,replace:"$1$self.TrailingWrapper,"}}],TrailingWrapper({children:e}){return r(p,null,e,r(R,{key:"vc-toolbox",noop:!0},r(Ok,null)))}});function Uk(e){return r("svg",{viewBox:"0 0 24 24",width:24,height:24,fill:"url(#heartGrad)",...e},r("defs",null,r("linearGradient",{id:"heartGrad",x1:"0",y1:"0",x2:"1",y2:"1"},r("stop",{offset:"0%",stopColor:"#8B5CF6"}),r("stop",{offset:"100%",stopColor:"#D946EF"}))),r("path",{d:"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"}))}function Bk(){let{showPluginMenu:e}=Wa.use(["showPluginMenu"]),t=_v();return e?r(C.MenuItem,{id:"plugins",label:"Plugins",action:()=>En(La)},t):null}function Fk(){let{rtlEnabled:e,vazirfontEnabled:t}=Wa.use(["rtlEnabled","vazirfontEnabled"]);return r(p,null,r(C.MenuCheckboxItem,{id:"vegord-toolbox-rtl",label:"Message Bubble",checked:e,action:()=>{let o=!e;Wa.store.rtlEnabled=o,p4(o),vgTg(o)}}),r(C.MenuCheckboxItem,{id:"vegord-toolbox-vazirfont",label:"Vazirmatn Font",checked:t,action:()=>{let o=!t;if(Wa.store.vazirfontEnabled=o,o){if(!document.getElementById("vegord-vazir-font-link")){let i=document.createElement("link");i.id="vegord-vazir-font-link",i.rel="stylesheet",i.type="text/css",i.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(i);let s=document.createElement("style");s.id="vegord-vazir-font-css",s.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(s)}}else{let n=document.getElementById("vegord-vazir-font-link");n&&n.remove();let i=document.getElementById("vegord-vazir-font-css");i&&i.remove()}}}))}function _v(e=!1){let t=Re().plugins,[o,n]=k(""),i=o.toLowerCase(),s=me(()=>Object.values(qe).sort((c,u)=>c.name.localeCompare(u.name)),[]),a=me(()=>s.filter(c=>!Ie(c.name)||c.name.endsWith("API")?!1:c.name.toLowerCase().includes(i)),[i]);return r(p,null,r(C.MenuControlItem,{id:"plugins-search",control:(c,u)=>r(C.MenuSearchControl,{...c,query:o,onChange:n,ref:u})}),r(C.MenuSeparator,null),a.map(c=>{let u=[],d=!1;if(c.settings)for(let[v,S]of Object.entries(c.settings.def)){if(Ra(c.settings,S))continue;d=!0;let b=t[c.name],y={id:`${c.name}-${v}`,key:v,label:Mn(ec(v)),disabled:Zo(c.settings,S)};switch(S.type){case 3:u.push(r(C.MenuCheckboxItem,{...y,checked:b[v],action:()=>{b[v]=!b[v],S.restartNeeded&&Ue("Restart to apply the change")}}));break;case 4:u.push(r(C.MenuItem,{...y},S.options.map(w=>r(C.MenuRadioItem,{group:`${c.name}-${v}`,id:`${c.name}-${v}-${w.value}`,key:w.label,label:w.label,checked:b[v]===w.value,action:()=>{b[v]=w.value,S.restartNeeded&&Ue("Restart to apply the change")}}))));break;case 5:if(S.stickToMarkers||S.componentProps)continue;u.push(r(C.MenuControlItem,{...y,control:(w,I)=>r(C.MenuSliderControl,{ref:I,...w,minValue:S.markers[0],maxValue:S.markers.at(-1),value:b[v],onChange:T=>b[v]=T})}));break}}let f=u.length>0;return!f&&!(e&&d)?null:r(C.MenuItem,{id:`${c.name}-menu`,key:c.name,label:c.name,action:()=>Tr(c)},f&&r(p,null,r(C.MenuGroup,{label:c.name},u),r(C.MenuSeparator,null),r(C.MenuItem,{id:`${c.name}-open`,label:"Open Settings",action:()=>Tr(c)})))}))}function $k(){return r(C.MenuItem,{id:"themes",label:"Themes",action:()=>En(Ds)},Ev())}function Ev(){let{useQuickCss:e,enabledThemes:t}=Re(["useQuickCss","enabledThemes"]),[o]=lt(VencordNative.themes.getThemesList);return r(p,null,r(C.MenuCheckboxItem,{id:"toggle-quickcss",checked:e,label:"Enable QuickCSS",action:()=>{de.useQuickCss=!e}}),r(C.MenuItem,{id:"edit-quickcss",label:"Edit QuickCSS",action:()=>VencordNative.quickCss.openEditor()}),r(C.MenuItem,{id:"manage-themes",label:"Manage Themes",action:()=>En(Ds)}),!!o?.length&&r(C.MenuGroup,null,o.map(n=>r(C.MenuCheckboxItem,{id:`theme-${n.fileName}`,key:n.fileName,label:n.name,checked:t.includes(n.fileName),action:()=>{t.includes(n.fileName)?de.enabledThemes=t.filter(i=>i!==n.fileName):de.enabledThemes=[...t,n.fileName]}}))))}function Gk(){let e=[];for(let o of Object.values(qe))if(o.toolboxActions&&Ie(o.name)){let n=typeof o.toolboxActions=="function"?o.toolboxActions():Object.entries(o.toolboxActions).map(([i,s])=>{let a=`${o.name}-${i}`;return r(C.MenuItem,{id:a,key:a,label:i,action:s})});if(!n||Array.isArray(n)&&n.length===0)continue;e.push({plugin:o,node:r(C.MenuGroup,{label:o.name,key:`${o.name}-group`},n)})}if(e.length<=5)return e.map(o=>o.node);let t=e.map(({node:o,plugin:n})=>r(C.MenuItem,{id:`${n.name}-menu`,key:`${n.name}-menu`,label:n.name,action:()=>Tr(n)},o));return r(C.MenuGroup,null,t)}function f4(e){return r(C.Menu,{navId:"vc-toolbox",onClose:e},r(C.MenuItem,{id:"vegord-donate",label:r("span",{style:{color:"#8B5CF6",backgroundColor:"#1a1a2e",textAlign:"center",display:"flex",justifyContent:"center",width:"100%",borderRadius:"6px",padding:"4px 8px"}},"Donate"),icon:Uk,action:()=>window.open("https://vergoboy.ir/donate","_blank")}),r(C.MenuItem,{id:"notifications",label:"Open Notification Log",action:_a}),Fk(),$k(),Bk(),Gk())}N();ge();ue();pe();H();x();l();(window.VencordStyles??=new Map).set("src/plugins/betterSettings/fullHeightContext.css",{name:"src/plugins/betterSettings/fullHeightContext.css",source:`/*
+/* hover toolbar for messages on the left (other people) opens from the LEFT of the
+   message instead of the right, so it never overflows the chat page */
+body.vc-tg-hover-left #popover-portal [class*='messageActions'],
+body.vc-tg-hover-left #popover-portal [class*='buttonContainer'] {
+    transform: translateX(-100%) !important;
+}
+[class*='messageListItem']:not([class*='vc-own-message']) [class*='messageActions'],
+[class*='messageListItem']:not([class*='vc-own-message']) [class*='buttonContainer'] {
+    left: 0 !important;
+    right: auto !important;
+}
+`;function p4(e){let t=document.getElementById("vegord-rtl-css");if(e&&!t){let o=document.createElement("style");o.id="vegord-rtl-css",o.textContent=_k,document.head.appendChild(o)}else!e&&t&&t.remove()};function vgTg(e){let t=window.__vcTgObs;if(e){if(!t){let tag=()=>{let a=[...document.querySelectorAll("[class*='messageListItem']")];let isM=l=>!!l&&typeof l.className=="string"&&l.className.includes("messageListItem");let id=()=>{try{return L.getCurrentUser()?.id}catch{return null}};let authorOf=n=>{if(!n)return null;if(typeof n.className=="string"&&n.className.includes("isAuthor"))return{key:"__own",own:!0};if(n.querySelector?.("[class*='isAuthor']"))return{key:"__own",own:!0};let k=Object.keys(n).find(c=>c.startsWith("__reactFiber$")||c.startsWith("__reactInternalInstance$"));if(!k)return null;let f=n[k],u=id();for(;f;f=f.return){let m=f.memoizedProps?.message;if(m&&m.author){let au=m.author;return{key:String(au.id??au.username??""),own:!!u&&String(au.id)===String(u)}}}return null};a.forEach(n=>{let au=authorOf(n),key=au&&au.key,ow=!!(au&&au.own);n.classList.toggle("vc-own-message",ow);let p=n.previousElementSibling,s=n.nextElementSibling,a1=authorOf(p),a2=authorOf(s),first=!isM(p)||!key||!a1||a1.key!==key,last=!isM(s)||!key||!a2||a2.key!==key;n.classList.toggle("vc-tg-first",first);n.classList.toggle("vc-tg-last",last);n.classList.toggle("vc-tg-only",first&&last);n.querySelectorAll("[class*='timestamp']").forEach(t=>{let a=(t.getAttribute&&t.getAttribute("aria-label"))||t.textContent||"";let m=String(a).match(/[0-9٠-٩]{1,2}:[0-9٠-٩]{2}(?:\s*[AP]\.?M\.?)?/i);m&&t.textContent!==m[0]&&(t.textContent=m[0])})})};let o=()=>requestAnimationFrame(tag),n=()=>o();o();window.__vcTgObs=new MutationObserver(n);window.__vcTgObs.observe(document.body,{childList:!0,subtree:!0});window.__vcTgIv=setInterval(o,2e3);let hv=ev=>{let l=ev.target&&ev.target.closest?ev.target.closest("[class*='messageListItem']"):null;l&&document.body.classList.toggle("vc-tg-hover-left",!l.classList.contains("vc-own-message"))};document.addEventListener("mouseover",hv);window.__vcTgHoverH=hv}}else{t&&(t.disconnect(),window.__vcTgObs=void 0);clearInterval(window.__vcTgIv);window.__vcTgIv=void 0;document.querySelectorAll(".vc-own-message,.vc-tg-first,.vc-tg-last,.vc-tg-only").forEach(n=>n.classList.remove("vc-own-message","vc-tg-first","vc-tg-last","vc-tg-only"));document.body.classList.remove("vc-tg-hover-left");window.__vcTgHoverH&&(document.removeEventListener("mouseover",window.__vcTgHoverH),window.__vcTgHoverH=void 0)}}function m4(e){let t=document.getElementById("vegord-vazir-font-link"),o=document.getElementById("vegord-vazir-font-css");if(e&&!t){let n=document.createElement("link");n.id="vegord-vazir-font-link",n.rel="stylesheet",n.type="text/css",n.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(n);let i=document.createElement("style");i.id="vegord-vazir-font-css",i.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(i)}else e||(t&&t.remove(),o&&o.remove())}function Ek({isShown:e}){return r("svg",{viewBox:"0 0 27 27",width:18,height:18,className:"vc-toolbox-icon"},e?r("path",{fill:"currentColor",d:"M12 2C9.24 2 7 4.24 7 7c0 1.45.67 2.76 1.73 3.7L7 13v7c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-7l3.27-2.3C16.33 9.76 17 8.45 17 7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-4 7l2 1.5V16H8v-2.5l2-1.5zm8 0V16h-3v-2.5l2-1.5zM7 18v2h10v-2H7z"}):r("path",{fill:"currentColor",d:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h2v6h-2zm0 8h2v2h-2z"}))}function Ok(){let e=Oe(null),[t,o]=k(!1);return r(nn,{position:"bottom",align:"right",animation:nn.Animation.NONE,shouldShow:t,onRequestClose:()=>o(!1),targetElementRef:e,renderPopout:()=>f4(()=>o(!1))},(n,{isShown:i})=>r(Lk,{ref:e,className:"vc-toolbox-btn",onClick:()=>o(s=>!s),tooltip:i?null:"Vegord Toolbox",icon:()=>r(Ek,{isShown:i}),selected:i}))}var Ls=h({name:"vegordToolbox",description:"Adds a button to the titlebar that houses Vencord quick actions",tags:["Utility","Developers"],authors:[m.Ven,m.AutumnVN],required:!0,enabledByDefault:!0,settings:Wa,start(){p4(this.settings.store.rtlEnabled),vgTg(this.settings.store.rtlEnabled),m4(this.settings.store.vazirfontEnabled)},stop(){p4(!1),vgTg(!1),m4(!1)},patches:[{find:'?"BACK_FORWARD_NAVIGATION":',replacement:{match:/(trailing:.{0,50}?)\i\.Fragment,(?=\{children:\[)/,replace:"$1$self.TrailingWrapper,"}}],TrailingWrapper({children:e}){return r(p,null,e,r(R,{key:"vc-toolbox",noop:!0},r(Ok,null)))}});function Uk(e){return r("svg",{viewBox:"0 0 24 24",width:24,height:24,fill:"url(#heartGrad)",...e},r("defs",null,r("linearGradient",{id:"heartGrad",x1:"0",y1:"0",x2:"1",y2:"1"},r("stop",{offset:"0%",stopColor:"#8B5CF6"}),r("stop",{offset:"100%",stopColor:"#D946EF"}))),r("path",{d:"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"}))}function Bk(){let{showPluginMenu:e}=Wa.use(["showPluginMenu"]),t=_v();return e?r(C.MenuItem,{id:"plugins",label:"Plugins",action:()=>En(La)},t):null}function Fk(){let{rtlEnabled:e,vazirfontEnabled:t}=Wa.use(["rtlEnabled","vazirfontEnabled"]);return r(p,null,r(C.MenuCheckboxItem,{id:"vegord-toolbox-rtl",label:"Message Bubble",checked:e,action:()=>{let o=!e;Wa.store.rtlEnabled=o,p4(o),vgTg(o)}}),r(C.MenuCheckboxItem,{id:"vegord-toolbox-vazirfont",label:"Vazirmatn Font",checked:t,action:()=>{let o=!t;if(Wa.store.vazirfontEnabled=o,o){if(!document.getElementById("vegord-vazir-font-link")){let i=document.createElement("link");i.id="vegord-vazir-font-link",i.rel="stylesheet",i.type="text/css",i.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(i);let s=document.createElement("style");s.id="vegord-vazir-font-css",s.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(s)}}else{let n=document.getElementById("vegord-vazir-font-link");n&&n.remove();let i=document.getElementById("vegord-vazir-font-css");i&&i.remove()}}}))}function _v(e=!1){let t=Re().plugins,[o,n]=k(""),i=o.toLowerCase(),s=me(()=>Object.values(qe).sort((c,u)=>c.name.localeCompare(u.name)),[]),a=me(()=>s.filter(c=>!Ie(c.name)||c.name.endsWith("API")?!1:c.name.toLowerCase().includes(i)),[i]);return r(p,null,r(C.MenuControlItem,{id:"plugins-search",control:(c,u)=>r(C.MenuSearchControl,{...c,query:o,onChange:n,ref:u})}),r(C.MenuSeparator,null),a.map(c=>{let u=[],d=!1;if(c.settings)for(let[v,S]of Object.entries(c.settings.def)){if(Ra(c.settings,S))continue;d=!0;let b=t[c.name],y={id:`${c.name}-${v}`,key:v,label:Mn(ec(v)),disabled:Zo(c.settings,S)};switch(S.type){case 3:u.push(r(C.MenuCheckboxItem,{...y,checked:b[v],action:()=>{b[v]=!b[v],S.restartNeeded&&Ue("Restart to apply the change")}}));break;case 4:u.push(r(C.MenuItem,{...y},S.options.map(w=>r(C.MenuRadioItem,{group:`${c.name}-${v}`,id:`${c.name}-${v}-${w.value}`,key:w.label,label:w.label,checked:b[v]===w.value,action:()=>{b[v]=w.value,S.restartNeeded&&Ue("Restart to apply the change")}}))));break;case 5:if(S.stickToMarkers||S.componentProps)continue;u.push(r(C.MenuControlItem,{...y,control:(w,I)=>r(C.MenuSliderControl,{ref:I,...w,minValue:S.markers[0],maxValue:S.markers.at(-1),value:b[v],onChange:T=>b[v]=T})}));break}}let f=u.length>0;return!f&&!(e&&d)?null:r(C.MenuItem,{id:`${c.name}-menu`,key:c.name,label:c.name,action:()=>Tr(c)},f&&r(p,null,r(C.MenuGroup,{label:c.name},u),r(C.MenuSeparator,null),r(C.MenuItem,{id:`${c.name}-open`,label:"Open Settings",action:()=>Tr(c)})))}))}function $k(){return r(C.MenuItem,{id:"themes",label:"Themes",action:()=>En(Ds)},Ev())}function Ev(){let{useQuickCss:e,enabledThemes:t}=Re(["useQuickCss","enabledThemes"]),[o]=lt(VencordNative.themes.getThemesList);return r(p,null,r(C.MenuCheckboxItem,{id:"toggle-quickcss",checked:e,label:"Enable QuickCSS",action:()=>{de.useQuickCss=!e}}),r(C.MenuItem,{id:"edit-quickcss",label:"Edit QuickCSS",action:()=>VencordNative.quickCss.openEditor()}),r(C.MenuItem,{id:"manage-themes",label:"Manage Themes",action:()=>En(Ds)}),!!o?.length&&r(C.MenuGroup,null,o.map(n=>r(C.MenuCheckboxItem,{id:`theme-${n.fileName}`,key:n.fileName,label:n.name,checked:t.includes(n.fileName),action:()=>{t.includes(n.fileName)?de.enabledThemes=t.filter(i=>i!==n.fileName):de.enabledThemes=[...t,n.fileName]}}))))}function Gk(){let e=[];for(let o of Object.values(qe))if(o.toolboxActions&&Ie(o.name)){let n=typeof o.toolboxActions=="function"?o.toolboxActions():Object.entries(o.toolboxActions).map(([i,s])=>{let a=`${o.name}-${i}`;return r(C.MenuItem,{id:a,key:a,label:i,action:s})});if(!n||Array.isArray(n)&&n.length===0)continue;e.push({plugin:o,node:r(C.MenuGroup,{label:o.name,key:`${o.name}-group`},n)})}if(e.length<=5)return e.map(o=>o.node);let t=e.map(({node:o,plugin:n})=>r(C.MenuItem,{id:`${n.name}-menu`,key:`${n.name}-menu`,label:n.name,action:()=>Tr(n)},o));return r(C.MenuGroup,null,t)}function f4(e){return r(C.Menu,{navId:"vc-toolbox",onClose:e},r(C.MenuItem,{id:"vegord-donate",label:r("span",{style:{color:"#8B5CF6",backgroundColor:"#1a1a2e",textAlign:"center",display:"flex",justifyContent:"center",width:"100%",borderRadius:"6px",padding:"4px 8px"}},"Donate"),icon:Uk,action:()=>window.open("https://vergoboy.ir/donate","_blank")}),r(C.MenuItem,{id:"notifications",label:"Open Notification Log",action:_a}),Fk(),$k(),Bk(),Gk())}N();ge();ue();pe();H();x();l();(window.VencordStyles??=new Map).set("src/plugins/betterSettings/fullHeightContext.css",{name:"src/plugins/betterSettings/fullHeightContext.css",source:`/*
  * Discord has dumb max height logic for their context menus.
  * If a context menu is at the bottom of the screen, its submenus are capped to its max height and can't even grow upwards
  * We unset the variable they use to cap height. This allows submenus to grow as tall as they want

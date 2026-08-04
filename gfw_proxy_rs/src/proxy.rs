@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::time::{timeout, Instant};
 
-use crate::config::Config;
+use crate::config::{Config, RelayConfig};
 use crate::discord::DiscordManager;
 use crate::doh::DohClient;
 use crate::fragment::send_fragmented_async;
@@ -19,6 +19,10 @@ pub struct ProxyServer {
     doh: Arc<DohClient>,
     discord: Arc<DiscordManager>,
     stats: Arc<StatsManager>,
+    // Temporary fragmentation override used by the preset benchmark phase to
+    // try several (num_fragment, sleep_ms) configs on real traffic without
+    // touching the process-wide config. None = use config defaults.
+    frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>>,
 }
 
 impl ProxyServer {
@@ -27,13 +31,25 @@ impl ProxyServer {
         doh: Arc<DohClient>,
         discord: Arc<DiscordManager>,
         stats: Arc<StatsManager>,
+        frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
             doh,
             discord,
             stats,
+            frag_override,
         })
+    }
+
+    /// Resolve the fragmentation parameters to apply to relayed ClientHellos:
+    /// the preset benchmark's temporary override when set, otherwise the
+    /// process config. Returns (num_fragment, fragment_sleep_ms).
+    fn current_frag(&self) -> (usize, u64) {
+        if let Some(over) = *self.frag_override.read() {
+            return over;
+        }
+        (self.config.num_fragment, self.config.fragment_sleep_ms)
     }
 
     pub async fn run(self: Arc<Self>, listener: TcpListener) -> std::io::Result<()> {
@@ -418,6 +434,38 @@ impl ProxyServer {
             self.doh.note_gateway_connect();
         }
 
+        // Discord via upstream SOCKS5 relay (see connect_and_relay).
+        if self.config.relay_socks5.is_some() && DiscordManager::is_discord_domain(host) {
+            match self.connect_via_relay(host, port).await {
+                Ok((backend, relay_ip)) => {
+                    println!(
+                        "[{}] [RELAY] {}:{} via {}",
+                        now_iso(),
+                        host,
+                        port,
+                        relay_ip
+                    );
+                    let resp =
+                        b"HTTP/1.1 200 Connection established\r\nProxy-agent: VegordProxy/3.0\r\n\r\n";
+                    if client.write_all(resp).await.is_ok() {
+                        self.relay_bidirectional(client, backend, host, port, &[relay_ip], true)
+                            .await;
+                    }
+                }
+                Err(e) => {
+                    self.stats.conn_filtered.fetch_add(1, Ordering::Relaxed);
+                    println!("[{}] [RELAY ERR] {}:{} - {}", now_iso(), host, port, e);
+                    let _ = client
+                        .write_all(b"HTTP/1.1 502 Bad Gateway\r\nProxy-agent: VegordProxy/3.0\r\n\r\n")
+                        .await;
+                }
+            }
+            if is_gateway {
+                self.doh.note_gateway_disconnect();
+            }
+            return;
+        }
+
         let targets = self.resolve_targets(host).await;
         let mut backend: Option<TcpStream> = None;
         if !targets.is_empty() {
@@ -439,7 +487,7 @@ impl ProxyServer {
         if let Some(backend) = backend {
             let resp = b"HTTP/1.1 200 Connection established\r\nProxy-agent: VegordProxy/3.0\r\n\r\n";
             if client.write_all(resp).await.is_ok() {
-                self.relay_bidirectional(client, backend, host, port, &targets)
+                self.relay_bidirectional(client, backend, host, port, &targets, false)
                     .await;
             }
             if is_gateway {
@@ -548,6 +596,40 @@ impl ProxyServer {
             self.doh.note_gateway_connect();
         }
 
+        // Discord domains are tunneled through the upstream SOCKS5 relay when one
+        // is configured: the relay's clean egress reaches the real Discord edge
+        // (the ISP's Cloudflare-Spectrum path is rejected with 1034). No ClientHello
+        // fragmentation is needed inside the tunnel — the relay reassembles it.
+        if self.config.relay_socks5.is_some() && DiscordManager::is_discord_domain(host) {
+            match self.connect_via_relay(host, port).await {
+                Ok((backend, relay_ip)) => {
+                    println!(
+                        "[{}] [RELAY] {}:{} via {}",
+                        now_iso(),
+                        host,
+                        port,
+                        relay_ip
+                    );
+                    let resp = b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
+                    if client.write_all(resp).await.is_ok() {
+                        self.relay_bidirectional(client, backend, host, port, &[relay_ip], true)
+                            .await;
+                    }
+                }
+                Err(e) => {
+                    self.stats.conn_filtered.fetch_add(1, Ordering::Relaxed);
+                    println!("[{}] [RELAY ERR] {}:{} - {}", now_iso(), host, port, e);
+                    let _ = client
+                        .write_all(b"\x05\x04\x00\x01\x00\x00\x00\x00\x00\x00")
+                        .await;
+                }
+            }
+            if is_gateway {
+                self.doh.note_gateway_disconnect();
+            }
+            return;
+        }
+
         let targets = self.resolve_targets(host).await;
         if targets.is_empty() {
             if is_gateway {
@@ -589,7 +671,7 @@ impl ProxyServer {
         if let Some(backend) = backend {
             let resp = b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
             if client.write_all(resp).await.is_ok() {
-                self.relay_bidirectional(client, backend, host, port, &targets)
+                self.relay_bidirectional(client, backend, host, port, &targets, false)
                     .await;
             }
             if is_gateway {
@@ -607,6 +689,149 @@ impl ProxyServer {
             .await;
     }
 
+    /// Open a connection to the upstream SOCKS5 relay and issue CONNECT to
+    /// `host:port`. Returns the tunneled stream plus the relay's resolved IP
+    /// (for traffic accounting).
+    async fn connect_via_relay(
+        &self,
+        host: &str,
+        port: u16,
+    ) -> std::io::Result<(TcpStream, IpAddr)> {
+        let relay = self
+            .config
+            .relay_socks5
+            .clone()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no relay configured"))?;
+        let relay_ip = self
+            .doh
+            .query(&relay.host)
+            .await
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("relay host {} not resolved", relay.host),
+                )
+            })?;
+        let addr = SocketAddr::new(relay_ip, relay.port);
+        let connect = timeout(
+            Duration::from_secs(self.config.connect_deadline_sec),
+            TcpStream::connect(addr),
+        )
+        .await
+        .map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::TimedOut, "relay connect timeout")
+        })??;
+        let mut connect = connect;
+        connect.set_nodelay(true)?;
+        self.socks5_connect(&mut connect, &relay, host, port).await?;
+        Ok((connect, relay_ip))
+    }
+
+    /// Perform the SOCKS5 negotiation (greeting + optional username/password
+    /// auth) and a CONNECT request for `host:port`. Domain names are passed
+    /// through so the relay resolves them from its own clean network.
+    async fn socks5_connect(
+        &self,
+        stream: &mut TcpStream,
+        relay: &RelayConfig,
+        host: &str,
+        port: u16,
+    ) -> std::io::Result<()> {
+        let hs_timeout = Duration::from_secs(self.config.socket_timeout_sec);
+        let mut buf = [0u8; 512];
+
+        // Greeting
+        let methods: &[u8] = if relay.user.is_some() {
+            &[0x05, 0x02, 0x00, 0x02]
+        } else {
+            &[0x05, 0x01, 0x00]
+        };
+        stream.write_all(methods).await?;
+        timeout(hs_timeout, stream.read_exact(&mut buf[..2])).await??;
+        if buf[0] != 0x05 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "relay returned non-SOCKS5 version",
+            ));
+        }
+        match buf[1] {
+            0x00 => {}
+            0x02 => {
+                let user = relay.user.clone().unwrap_or_default();
+                let pass = relay.pass.clone().unwrap_or_default();
+                let mut auth = Vec::with_capacity(3 + user.len() + pass.len());
+                auth.push(0x01);
+                auth.push(user.len() as u8);
+                auth.extend_from_slice(user.as_bytes());
+                auth.push(pass.len() as u8);
+                auth.extend_from_slice(pass.as_bytes());
+                stream.write_all(&auth).await?;
+                timeout(hs_timeout, stream.read_exact(&mut buf[..2])).await??;
+                if buf[1] != 0x00 {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "relay authentication failed",
+                    ));
+                }
+            }
+            m => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    format!("relay refused auth method 0x{:02x}", m),
+                ));
+            }
+        }
+
+        // CONNECT host:port (ATYP 0x03 = domain)
+        let host_bytes = host.as_bytes();
+        if host_bytes.len() > 255 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "hostname too long for SOCKS5",
+            ));
+        }
+        let mut req = Vec::with_capacity(7 + host_bytes.len());
+        req.extend_from_slice(&[0x05, 0x01, 0x00, 0x03, host_bytes.len() as u8]);
+        req.extend_from_slice(host_bytes);
+        req.extend_from_slice(&port.to_be_bytes());
+        stream.write_all(&req).await?;
+
+        timeout(hs_timeout, stream.read_exact(&mut buf[..4])).await??;
+        if buf[0] != 0x05 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "relay returned non-SOCKS5 version",
+            ));
+        }
+        if buf[1] != 0x00 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionRefused,
+                format!("relay CONNECT failed (reply 0x{:02x})", buf[1]),
+            ));
+        }
+        // Consume the remaining bind address bytes.
+        let atyp = buf[3];
+        let rest = match atyp {
+            0x01 => 4,
+            0x03 => {
+                timeout(hs_timeout, stream.read_exact(&mut buf[..1])).await??;
+                buf[0] as usize
+            }
+            0x04 => 16,
+            _ => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "relay returned unknown address type",
+                ));
+            }
+        };
+        let mut sink = [0u8; 256];
+        timeout(hs_timeout, stream.read_exact(&mut sink[..rest])).await??;
+        // Consume the 2-byte BND.PORT that always follows the bind address.
+        timeout(hs_timeout, stream.read_exact(&mut buf[..2])).await??;
+        Ok(())
+    }
+
     async fn relay_bidirectional(
         &self,
         mut client: TcpStream,
@@ -614,6 +839,7 @@ impl ProxyServer {
         host: &str,
         port: u16,
         targets: &[IpAddr],
+        via_relay: bool,
     ) {
         // Read first payload from client (TLS Client Hello)
         let mut first_buf = [0u8; 16384];
@@ -624,6 +850,34 @@ impl ProxyServer {
             _ => return,
         };
 
+        // Relay path: the tunnel is already established and unfiltered, so just
+        // forward the whole ClientHello (no fragmentation, no IP retry) and wait
+        // for the ServerHello before entering the bidirectional copy loop.
+        if via_relay {
+            if backend.write_all(&first_buf[..first_n]).await.is_err() {
+                return;
+            }
+            let is_tls = first_buf[0] == 0x16 && first_n >= 6 && first_buf[5] == 0x01;
+            if is_tls {
+                let handshake_timeout =
+                    Duration::from_secs(self.config.relay_handshake_timeout_sec);
+                let mut hello = [0u8; 8192];
+                match timeout(handshake_timeout, backend.read(&mut hello)).await {
+                    Ok(Ok(n)) if n > 0 => {
+                        if client.write_all(&hello[..n]).await.is_err() {
+                            return;
+                        }
+                        self.stats.record_dl(targets[0], n as u64);
+                    }
+                    _ => return,
+                }
+            }
+            let ip = targets[0];
+            self.stats.record_ul(ip, first_n as u64);
+            self.relay_copy_loop(client, backend, host, port, ip).await;
+            return;
+        }
+
         // Send the ClientHello with TLS SNI fragmentation. If the connection is
         // reset mid-handshake (GFW RST against Cloudflare etc.), the client has
         // not received anything yet — it is still waiting for the ServerHello —
@@ -632,6 +886,7 @@ impl ProxyServer {
         let mut ip_idx = 0usize;
         let max_relay_attempts = self.config.relay_retries.max(1);
         let mut delivered = false;
+        let frag = self.current_frag();
         for attempt in 0..max_relay_attempts {
             if attempt > 0 {
                 // GFW RSTs tend to land in short bursts that hit every attempt
@@ -651,8 +906,8 @@ impl ProxyServer {
             match send_fragmented_async(
                 &mut backend,
                 &first_buf[..first_n],
-                self.config.num_fragment,
-                self.config.fragment_sleep_ms,
+                frag.0,
+                frag.1,
             )
             .await
             {
@@ -734,17 +989,27 @@ impl ProxyServer {
 
         let ip = targets[ip_idx];
         self.stats.record_ul(ip, first_n as u64);
+        self.relay_copy_loop(client, backend, host, port, ip).await;
+    }
 
-        // Bi-directional async forwarding, half-close aware (spec section 5.1).
-        //
-        // The old code used `tokio::select!`, which cancelled the other task the
-        // moment either direction finished — dropping buffered upload bytes when
-        // a server sent an early response / 100-continue. Instead each direction
-        // runs to completion independently (tokio::join!). When one direction
-        // hits EOF it performs a real TCP half-close (shutdown) on the opposite
-        // write half, and the connection is only torn down once BOTH directions
-        // have finished. An overall bulk-transfer deadline is the only way the
-        // relay is force-closed (guards genuinely dead connections).
+    /// Bi-directional async forwarding, half-close aware (spec section 5.1).
+    ///
+    /// The old code used `tokio::select!`, which cancelled the other task the
+    /// moment either direction finished — dropping buffered upload bytes when
+    /// a server sent an early response / 100-continue. Instead each direction
+    /// runs to completion independently (tokio::join!). When one direction
+    /// hits EOF it performs a real TCP half-close (shutdown) on the opposite
+    /// write half, and the connection is only torn down once BOTH directions
+    /// have finished. An overall bulk-transfer deadline is the only way the
+    /// relay is force-closed (guards genuinely dead connections).
+    async fn relay_copy_loop(
+        &self,
+        mut client: TcpStream,
+        mut backend: TcpStream,
+        host: &str,
+        port: u16,
+        ip: IpAddr,
+    ) {
         let (mut cr, mut cw) = client.split();
         let (mut br, mut bw) = backend.split();
 

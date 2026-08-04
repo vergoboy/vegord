@@ -10,6 +10,7 @@ import { existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
 import { logError, logInfo, logWarn } from "./connectionLog";
+import { Settings } from "./settings";
 
 let proxyProcess: ChildProcess | null = null;
 
@@ -52,6 +53,7 @@ const PROXY_LOG_MARKERS = [
     "[VOICE FAILOVER]",
     "[PRESET]",
     "[FRAG]",
+    "[RELAY]",
     "[RELAY DEADLINE]"
 ];
 
@@ -117,7 +119,14 @@ function spawnProxy() {
 
         console.log(`${logPrefix} Starting high-performance Rust proxy binary at ${rustBinary}`);
         logInfo(`proxy_start rust binary=${rustBinary}`);
-        child = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
+
+        const relaySpec = process.env.VEGORD_RELAY_SOCKS5 || Settings.store.relaySocks5;
+        const proxyArgs = ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir];
+        if (relaySpec) {
+            proxyArgs.push("--relay-socks5", relaySpec);
+            console.log(`${logPrefix} Discord traffic will use upstream SOCKS5 relay ${relaySpec.split("@").pop()}`);
+        }
+        child = spawn(rustBinary, proxyArgs, {
             cwd: dirname(rustBinary),
             stdio: ["ignore", "pipe", "pipe"],
             env: {

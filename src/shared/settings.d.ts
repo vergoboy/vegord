@@ -41,6 +41,9 @@ export interface Settings {
     enableTelemetry?: boolean;
     shareDiscordUsername?: boolean;
 
+    /** Upstream SOCKS5 relay ("user:pass@host:port") for Discord traffic, to bypass the GFW's Cloudflare-Spectrum relay that rejects Discord with Cloudflare error 1034. */
+    relaySocks5?: string;
+
     audio?: {
         workaround?: boolean;
 

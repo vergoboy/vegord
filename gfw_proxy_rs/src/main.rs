@@ -1,3 +1,4 @@
+mod benchmark;
 mod config;
 mod control;
 mod discord;
@@ -51,6 +52,17 @@ async fn main() -> std::io::Result<()> {
     if let Ok(token) = env::var("VEGORD_PANEL_UPLOAD_TOKEN") {
         config.panel_upload_token = token;
     }
+    if let Ok(spec) = env::var("VEGORD_RELAY_SOCKS5") {
+        if let Some(relay) = config::parse_relay_socks5(&spec) {
+            config.relay_socks5 = Some(relay);
+        }
+    }
+
+    // Apply the last known-good preset (local benchmark or downloaded server
+    // preset) BEFORE CLI parsing so explicit user flags always win over the
+    // preset (spec section 4 principle #6: server/local config is a starting
+    // point, never forced).
+    preset::apply_preset_to_config(&mut config);
 
     // CLI argument parsing
     let args: Vec<String> = env::args().collect();
@@ -87,6 +99,12 @@ async fn main() -> std::io::Result<()> {
                 config.preset_sync_enabled = args[i + 1] == "1" || args[i + 1].eq_ignore_ascii_case("true");
                 i += 2;
             }
+            "--relay-socks5" if i + 1 < args.len() => {
+                if let Some(relay) = config::parse_relay_socks5(&args[i + 1]) {
+                    config.relay_socks5 = Some(relay);
+                }
+                i += 2;
+            }
             _ => {
                 i += 1;
             }
@@ -97,12 +115,17 @@ async fn main() -> std::io::Result<()> {
         let _ = std::fs::create_dir_all(&config.data_dir);
     }
 
-    // Apply the last known-good preset (local benchmark or downloaded server
-    // preset) before anything else touches the config.
-    preset::apply_preset_to_config(&mut config);
+    if let Some(relay) = &config.relay_socks5 {
+        println!(
+            "[{}] [RELAY] Discord routed via upstream SOCKS5 {}:{}",
+            stats::now_iso(),
+            relay.host,
+            relay.port
+        );
+    }
 
     println!(
-        "[{}] [INIT] Vegord Rust GFW Proxy v3.2.0 starting on port {} (data dir: {})",
+        "[{}] [INIT] Vegord Rust GFW Proxy v3.5.0 starting on port {} (data dir: {})",
         stats::now_iso(),
         config.listen_port,
         config.data_dir.display()
@@ -148,11 +171,16 @@ async fn main() -> std::io::Result<()> {
 
     // ISP-aware preset sync: benchmark this network, save a local preset,
     // fetch/apply a validated server preset when available (spec section 4).
+    // The fragmentation override knob is shared with the proxy so the benchmark
+    // can try several configs on real relayed traffic.
+    let frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>> =
+        Arc::new(parking_lot::RwLock::new(None));
     let preset_doh = Arc::clone(&doh_client);
     let preset_discord = Arc::clone(&discord_mgr);
     let preset_cfg = config.clone();
+    let preset_knob = Arc::clone(&frag_override);
     tokio::spawn(async move {
-        preset::run_preset_sync(preset_cfg, preset_doh, preset_discord).await;
+        preset::run_preset_sync(preset_cfg, preset_doh, preset_discord, preset_knob).await;
     });
 
     // Start proxy server
@@ -161,6 +189,7 @@ async fn main() -> std::io::Result<()> {
         doh_client,
         discord_mgr,
         stats_mgr,
+        frag_override,
     );
 
     proxy_server.run(listener).await

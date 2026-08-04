@@ -16,7 +16,7 @@ use serde_json::json;
 use trust_dns_proto::op::{Message, Query};
 use trust_dns_proto::rr::{Name, RecordType};
 
-use crate::config::{Config, DOH_SERVERS, get_offline_dns};
+use crate::config::{Config, DOH_SERVERS, resolve_offline_dns};
 use crate::discord::DiscordManager;
 use crate::stats::now_iso;
 
@@ -389,7 +389,7 @@ impl DohClient {
     /// alternate IP when the GFW resets connections to the primary one.
     pub async fn query_all(&self, server_name: &str) -> Option<Vec<IpAddr>> {
         // 1. Check offline DNS static mapping
-        if let Some(&ip_str) = get_offline_dns().get(server_name) {
+        if let Some(ip_str) = resolve_offline_dns(server_name) {
             if let Ok(ip) = IpAddr::from_str(ip_str) {
                 println!("[{}] [DNS] offline {} -> {}", now_iso(), server_name, ip);
                 return Some(vec![ip]);

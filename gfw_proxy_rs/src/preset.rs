@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::benchmark::benchmark_fragmentation;
 use crate::config::{Config, DOH_SERVERS};
 use crate::discord::DiscordManager;
 use crate::doh::DohClient;
@@ -103,7 +104,12 @@ pub fn apply_preset_to_config(config: &mut Config) {
 /// Background sync loop: fingerprint -> benchmark -> save local preset ->
 /// fetch/apply server preset -> upload (consent-gated). Re-checks the
 /// fingerprint periodically and re-benchmarks when the ISP changes.
-pub async fn run_preset_sync(config: Config, doh: Arc<DohClient>, discord: Arc<DiscordManager>) {
+pub async fn run_preset_sync(
+    mut config: Config,
+    doh: Arc<DohClient>,
+    discord: Arc<DiscordManager>,
+    frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>>,
+) {
     if !config.preset_sync_enabled {
         return;
     }
@@ -117,6 +123,49 @@ pub async fn run_preset_sync(config: Config, doh: Arc<DohClient>, discord: Arc<D
         let fingerprint = fetch_fingerprint(&config, &client).await;
         if fingerprint != last_fingerprint {
             last_fingerprint = fingerprint.clone();
+
+            // Wait a bounded time for the DoH flow to populate the Discord IP
+            // pool, then run a fresh ping round so the preset carries real
+            // RTT/loss scores instead of the all-null snapshot the old code
+            // captured ~3s after boot (before the first 30s ping interval).
+            // If no Discord traffic happened yet, resolve a few core domains
+            // directly so the pool has candidates to ping.
+            let deadline = Instant::now() + Duration::from_secs(12);
+            if discord.count_ips() == 0 {
+                for host in ["discord.com", "gateway.discord.gg", "cdn.discordapp.com"] {
+                    if doh.query(host).await.is_some() {
+                        break;
+                    }
+                }
+            }
+            while discord.count_ips() == 0 && Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+            discord.ping_once(&config).await;
+
+            // Actually benchmark fragmentation against a reachable TLS target
+            // and select the fastest config that still completes a handshake.
+            // Previously the preset just re-saved whatever the defaults were.
+            // With an upstream SOCKS5 relay configured, Discord no longer uses
+            // the fragmented path at all, so the benchmark is skipped.
+            let proxy_url = format!("http://127.0.0.1:{}", config.listen_port);
+            if config.relay_socks5.is_none() {
+                if let Some((n, s)) = benchmark_fragmentation(&proxy_url, &frag_override).await {
+                    config.num_fragment = n;
+                    config.fragment_sleep_ms = s;
+                    // Leave the override in place for the rest of this session so
+                    // the measured config takes effect on live relayed traffic
+                    // immediately, not only after the next process restart (the
+                    // shared knob makes the proxy read it via current_frag()).
+                    *frag_override.write() = Some((n, s));
+                    println!(
+                        "[{}] [PRESET] benchmark selected fragmentation {}x{}ms",
+                        now_iso(),
+                        n,
+                        s
+                    );
+                }
+            }
 
             let measured = build_measured_preset(&config, &doh, &discord, &fingerprint);
             save_measured_preset(&config, &measured);

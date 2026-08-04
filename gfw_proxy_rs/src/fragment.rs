@@ -6,6 +6,14 @@ const TLS_HANDSHAKE_CLIENT_HELLO: u8 = 0x01;
 const TLS_EXTENSION_SERVER_NAME: u16 = 0x0000;
 const TLS_EXT_HOST_NAME: u8 = 0x00; // server_name list entry type "host_name"
 
+/// Keep the first TCP segment short enough that an on-path DPI box cannot
+/// fingerprint the ClientHello from it alone. The ClientHello's cipher-suite
+/// list starts right after record(5) + handshake(4) + version(2) + random(32)
+/// = byte 43; a first segment that ends before byte 43 carries no ciphers and
+/// is unclassifiable. Empirically: first segment <= 40 bytes passes, >= 42
+/// gets reset, so 24 leaves a safe margin while still being a real cut.
+const FIRST_FRAGMENT_SIZE: usize = 24;
+
 /// Locate the byte offset of the SNI hostname inside a TLS ClientHello.
 ///
 /// The spec requires splitting exactly at the SNI extension offset rather than
@@ -105,15 +113,23 @@ pub fn find_sni_offset(data: &[u8]) -> Option<usize> {
 }
 
 /// Split `data` at the given index, producing up to `num_fragment` pieces.
-/// The first cut is always at `split_at`; the remainder is subdivided evenly so
-/// the total fragment count is respected without reintroducing random offsets.
+/// The first cut is always early (see `FIRST_FRAGMENT_SIZE`) so the first TCP
+/// segment is too small to be TLS-fingerprinted; the SNI cut is kept as the
+/// second structural cut so the hostname is never contiguous in one segment.
+/// The remainder is subdivided evenly so the total fragment count is respected
+/// without reintroducing random offsets.
 fn cut_points(length: usize, num_fragment: usize, split_at: usize) -> Vec<usize> {
-    let mut cuts = vec![split_at];
-    let rest = length - split_at;
-    let extra = num_fragment.saturating_sub(2);
+    let early = FIRST_FRAGMENT_SIZE.min(length.saturating_sub(1)).max(1);
+    let mut cuts = vec![early];
+    if split_at > early {
+        cuts.push(split_at);
+    }
+    let last_cut = *cuts.last().unwrap();
+    let rest = length - last_cut;
+    let extra = num_fragment.saturating_sub(cuts.len());
     if extra > 0 && rest > 1 {
         let step = (rest / (extra + 1)).max(1);
-        let mut pos = split_at + step;
+        let mut pos = last_cut + step;
         while pos < length - 1 && cuts.len() < num_fragment {
             cuts.push(pos);
             pos += step;
@@ -140,7 +156,8 @@ where
         return Ok(());
     }
 
-    // Primary cut: exactly at the SNI hostname offset so the name is never
+    // First cut is early (defeats first-segment TLS fingerprinting by on-path
+    // DPI); then cut exactly at the SNI hostname offset so the name is never
     // contiguous in a single segment. Fallback for non-TLS / no-SNI payloads is
     // a fixed third-of-the-buffer point (deterministic, not random).
     let sni_offset = find_sni_offset(data);

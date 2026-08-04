@@ -2,6 +2,46 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+/// Upstream SOCKS5 relay for SNI-filtered domains (e.g. Discord). Connections
+/// to relay-routed hosts are tunneled through this proxy instead of connecting
+/// directly, so the relay's clean egress reaches the origin without the ISP's
+/// DNS-hijack/Cloudflare-Spectrum path (which Cloudflare rejects with 1034).
+#[derive(Debug, Clone)]
+pub struct RelayConfig {
+    pub host: String,
+    pub port: u16,
+    pub user: Option<String>,
+    pub pass: Option<String>,
+}
+
+/// Parse a relay spec of the form `[user:pass@]host:port`.
+pub fn parse_relay_socks5(spec: &str) -> Option<RelayConfig> {
+    let spec = spec.trim();
+    let (auth, hostport) = match spec.rsplit_once('@') {
+        Some((a, hp)) => (Some(a), hp),
+        None => (None, spec),
+    };
+    let (host, port) = hostport.rsplit_once(':')?;
+    let host = host.trim().to_string();
+    if host.is_empty() {
+        return None;
+    }
+    let port: u16 = port.parse().ok()?;
+    let (user, pass) = match auth {
+        Some(a) => match a.split_once(':') {
+            Some((u, p)) => (Some(u.to_string()), Some(p.to_string())),
+            None => (Some(a.to_string()), None),
+        },
+        None => (None, None),
+    };
+    Some(RelayConfig {
+        host,
+        port,
+        user,
+        pass,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub listen_port: u16,
@@ -51,6 +91,9 @@ pub struct Config {
     pub panel_timeout_sec: u64,
     // Consent-gated preset upload: empty disables upload entirely.
     pub panel_upload_token: String,
+    // Upstream SOCKS5 relay for Discord (bypasses the Cloudflare-Spectrum dead
+    // end). None = legacy direct/offline-DNS path.
+    pub relay_socks5: Option<RelayConfig>,
 }
 
 impl Default for Config {
@@ -92,6 +135,7 @@ impl Default for Config {
             panel_base_url: "https://vergoboy.ir/vegord/api/v1".to_string(),
             panel_timeout_sec: 6,
             panel_upload_token: String::new(),
+            relay_socks5: None,
         }
     }
 }
@@ -129,6 +173,11 @@ pub fn get_offline_dns() -> &'static HashMap<&'static str, &'static str> {
     OFFLINE_DNS.get_or_init(|| {
         let mut m = HashMap::new();
         m.insert("cloudflare-dns.com", "203.32.120.226");
+        // Discord domains are intentionally NOT pinned here: they must resolve via
+        // DoH so the real Discord anycast IPs (162.159.x.2x2) land in the ping
+        // pool and are routed directly with ClientHello fragmentation. Routing
+        // them through the ISP's SNI-forwarding host (203.32.120.226) is rejected
+        // with Cloudflare 1034 "Edge IP Restricted".
         m.insert("dns.google", "8.8.8.8");
         m.insert("doh.opendns.com", "208.67.222.222");
         m.insert("dns.quad9.net", "9.9.9.9");
@@ -265,4 +314,27 @@ pub fn get_offline_dns() -> &'static HashMap<&'static str, &'static str> {
         m.insert("yt3.ggpht.com", "142.250.186.36");
         m
     })
+}
+
+/// Resolve a host through the static offline-DNS map, falling back to suffix
+/// rules for domains whose every subdomain needs the same relay path (Discord:
+/// all subdomains land in IP-blocked ranges and the SNI-forwarding relay at
+/// 203.32.120.226 — Cloudflare Spectrum — is the only way past the block).
+pub fn resolve_offline_dns(host: &str) -> Option<&'static str> {
+    if let Some(ip) = get_offline_dns().get(host) {
+        return Some(ip);
+    }
+    static SUFFIXES: &[(&str, &str)] = &[
+        (".discord.com", "203.32.120.226"),
+        (".discordapp.com", "203.32.120.226"),
+        (".discordapp.net", "203.32.120.226"),
+        (".discord.gg", "203.32.120.226"),
+        (".discord.media", "203.32.120.226"),
+    ];
+    for (suffix, ip) in SUFFIXES {
+        if host.ends_with(suffix) {
+            return Some(ip);
+        }
+    }
+    None
 }

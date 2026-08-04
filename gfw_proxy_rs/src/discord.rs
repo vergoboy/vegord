@@ -132,93 +132,106 @@ impl DiscordManager {
     pub fn start_pinger(self: Arc<Self>, config: Config) {
         tokio::spawn(async move {
             let interval_dur = Duration::from_secs(config.discord_ping_interval_sec);
-            let ping_timeout = Duration::from_secs(config.discord_ping_timeout_sec);
-
             loop {
                 tokio::time::sleep(interval_dur).await;
+                self.ping_once(&config).await;
+            }
+        });
+    }
 
-                let targets: Vec<IpAddr> = {
-                    let ips = self.ips.read();
-                    ips.keys().copied().collect()
-                };
+    pub fn count_ips(&self) -> usize {
+        self.ips.read().len()
+    }
 
-                if targets.is_empty() {
-                    continue;
-                }
+    /// Run one full ping round over every known Discord IP (TCP RTT to :443),
+    /// updating per-IP RTT/loss scores and the best-IP ranking. Extracted from
+    /// `start_pinger` so the preset benchmark phase can trigger a fresh round on
+    /// demand instead of waiting out the whole ping interval (the previous code
+    /// captured all-null scores because the preset was built ~3s after boot,
+    /// long before the first ping round ever ran).
+    pub async fn ping_once(&self, config: &Config) {
+        let ping_timeout = Duration::from_secs(config.discord_ping_timeout_sec);
 
-                let mut best_score_val = f64::MAX;
-                let mut best_rtt_val = f64::MAX;
-                let mut best_ip_val: Option<IpAddr> = None;
+        let targets: Vec<IpAddr> = {
+            let ips = self.ips.read();
+            ips.keys().copied().collect()
+        };
 
-                for ip in targets {
-                    let addr = SocketAddr::new(ip, 443);
-                    let t0 = Instant::now();
+        if targets.is_empty() {
+            return;
+        }
 
-                    let res = timeout(ping_timeout, TcpStream::connect(addr)).await;
-                    let rtt_opt = match res {
-                        Ok(Ok(stream)) => {
-                            let rtt = t0.elapsed().as_secs_f64() * 1000.0;
-                            drop(stream);
-                            let rtt = (rtt * 10.0).round() / 10.0;
-                            if rtt < config.discord_min_rtt_ms {
-                                None
-                            } else {
-                                Some(rtt)
-                            }
-                        }
-                        _ => None,
-                    };
+        let mut best_score_val = f64::MAX;
+        let mut best_rtt_val = f64::MAX;
+        let mut best_ip_val: Option<IpAddr> = None;
 
-                    let now_secs = chrono::Utc::now().timestamp() as u64;
-                    let mut ips = self.ips.write();
-                    if let Some(info) = ips.get_mut(&ip) {
-                        info.last_ping = now_secs;
-                        info.rtt = rtt_opt;
-                        if let Some(rtt) = rtt_opt {
-                            if info.implausible_logged {
-                                info.implausible_logged = false;
-                            }
-                            info.samples.push(rtt);
-                            if info.samples.len() > 10 {
-                                info.samples.remove(0);
-                            }
-                            let avg: f64 = info.samples.iter().sum::<f64>() / info.samples.len() as f64;
-                            // Rank by the combined score (RTT + loss penalty) so a
-                            // low-latency but lossy route does not beat a clean one.
-                            let score = combined_score(Some(avg), info.loss_pct);
-                            if score < best_score_val {
-                                best_score_val = score;
-                                best_rtt_val = avg;
-                                best_ip_val = Some(ip);
-                            }
-                        } else if !info.implausible_logged {
-                            // An implausible (likely ISP-intercepted) RTT repeats
-                            // every ping cycle for the same IP; log it once to
-                            // avoid spamming the connection log with thousands
-                            // of identical lines.
-                            info.implausible_logged = true;
-                            println!(
-                                "[{}] [DISCORD] implausible RTT for {} (< {}ms, likely ISP interception), ignoring",
-                                crate::stats::now_iso(),
-                                ip,
-                                config.discord_min_rtt_ms
-                            );
-                        }
+        for ip in targets {
+            let addr = SocketAddr::new(ip, 443);
+            let t0 = Instant::now();
+
+            let res = timeout(ping_timeout, TcpStream::connect(addr)).await;
+            let rtt_opt = match res {
+                Ok(Ok(stream)) => {
+                    let rtt = t0.elapsed().as_secs_f64() * 1000.0;
+                    drop(stream);
+                    let rtt = (rtt * 10.0).round() / 10.0;
+                    if rtt < config.discord_min_rtt_ms {
+                        None
+                    } else {
+                        Some(rtt)
                     }
                 }
+                _ => None,
+            };
 
-                if let Some(bip) = best_ip_val {
-                    let rounded_best = (best_rtt_val * 10.0).round() / 10.0;
-                    *self.best_ip.write() = Some(bip);
-                    *self.best_rtt.write() = Some(rounded_best);
+            let now_secs = chrono::Utc::now().timestamp() as u64;
+            let mut ips = self.ips.write();
+            if let Some(info) = ips.get_mut(&ip) {
+                info.last_ping = now_secs;
+                info.rtt = rtt_opt;
+                if let Some(rtt) = rtt_opt {
+                    if info.implausible_logged {
+                        info.implausible_logged = false;
+                    }
+                    info.samples.push(rtt);
+                    if info.samples.len() > 10 {
+                        info.samples.remove(0);
+                    }
+                    let avg: f64 = info.samples.iter().sum::<f64>() / info.samples.len() as f64;
+                    // Rank by the combined score (RTT + loss penalty) so a
+                    // low-latency but lossy route does not beat a clean one.
+                    let score = combined_score(Some(avg), info.loss_pct);
+                    if score < best_score_val {
+                        best_score_val = score;
+                        best_rtt_val = avg;
+                        best_ip_val = Some(ip);
+                    }
+                } else if !info.implausible_logged {
+                    // An implausible (likely ISP-intercepted) RTT repeats
+                    // every ping cycle for the same IP; log it once to
+                    // avoid spamming the connection log with thousands
+                    // of identical lines.
+                    info.implausible_logged = true;
                     println!(
-                        "[{}] [DISCORD] best IP updated: {} (avg RTT={}ms)",
+                        "[{}] [DISCORD] implausible RTT for {} (< {}ms, likely ISP interception), ignoring",
                         crate::stats::now_iso(),
-                        bip,
-                        rounded_best
+                        ip,
+                        config.discord_min_rtt_ms
                     );
                 }
             }
-        });
+        }
+
+        if let Some(bip) = best_ip_val {
+            let rounded_best = (best_rtt_val * 10.0).round() / 10.0;
+            *self.best_ip.write() = Some(bip);
+            *self.best_rtt.write() = Some(rounded_best);
+            println!(
+                "[{}] [DISCORD] best IP updated: {} (avg RTT={}ms)",
+                crate::stats::now_iso(),
+                bip,
+                rounded_best
+            );
+        }
     }
 }

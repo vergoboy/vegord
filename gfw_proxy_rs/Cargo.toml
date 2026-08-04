@@ -1,6 +1,6 @@
 [package]
 name = "gfw_proxy"
-version = "3.2.0"
+version = "3.3.0"
 edition = "2021"
 authors = ["Vergoboy <vergoboy@riseup.net>"]
 description = "GFW-Resistant High-Performance SOCKS5/HTTP Proxy with TLS ClientHello Fragmentation, Multi-DoH Racing, and Discord Voice/Video Optimization in Rust"
