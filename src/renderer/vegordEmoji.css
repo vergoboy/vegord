@@ -25,24 +25,11 @@
     font-family: var(--font-primary), "Twemoji Mozilla";
 }
 
-/* The ⋮ button injected into the chat bar by the vegordChatMenu patch. */
+/* The ⋮ button injected into the chat bar by the vegordChatMenu patch. It sits
+   in the right-side button cluster; all look/behavior comes from the patch's
+   inline styles, so only the base interaction states live here. */
 #vegord-more-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    margin: 0 2px;
-    border-radius: 50%;
-    cursor: pointer;
-    color: var(--interactive-normal);
-    background: transparent;
     flex: 0 0 auto;
-    transition: background 0.15s ease, color 0.15s ease;
-}
-#vegord-more-button:hover {
-    background: var(--background-modifier-hover);
-    color: var(--interactive-hover);
 }
 
 /* Hide Discord's native "+" (More message options) chat bar button, but only
