@@ -28,10 +28,7 @@ const CONSOLE_OPEN = "vegordAnnouncement:open";
 async function fetchAnnouncements() {
     try {
         const clientId = getClientId();
-        const res = await fetchWithTimeout(
-            `${PANEL_BASE}/notifications?clientId=${encodeURIComponent(clientId)}`,
-            {}
-        );
+        const res = await fetchWithTimeout(`${PANEL_BASE}/notifications?clientId=${encodeURIComponent(clientId)}`, {});
         if (!res.ok) return;
         const data = await res.json();
         const notifications = Array.isArray(data.notifications) ? data.notifications : [];

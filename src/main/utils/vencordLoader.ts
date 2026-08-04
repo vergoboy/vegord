@@ -74,9 +74,7 @@ export async function isValidVencordInstall(dir: string) {
 export async function copyBundledVencordFiles() {
     if (!(await existsAsync(BUNDLED_VENCORD_DIR))) return false;
 
-    await Promise.all(
-        FILES_TO_DOWNLOAD.map(f => copyFile(join(BUNDLED_VENCORD_DIR, f), join(VENCORD_FILES_DIR, f)))
-    );
+    await Promise.all(FILES_TO_DOWNLOAD.map(f => copyFile(join(BUNDLED_VENCORD_DIR, f), join(VENCORD_FILES_DIR, f))));
     return true;
 }
 

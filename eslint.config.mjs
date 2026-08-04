@@ -17,7 +17,30 @@ import tseslint from "typescript-eslint";
 import prettier from "eslint-plugin-prettier";
 
 export default defineConfig(
-    { ignores: ["dist"] },
+    {
+        ignores: [
+            "dist",
+            "src/eslint.config.mjs",
+            "src/package.json",
+            "src/README.md",
+            "src/LICENSE",
+            "src/PKGBUILD",
+            "src/build-arch.sh",
+            "src/pnpm-workspace.yaml",
+            "src/chatlog.log",
+            // gitignored leftover source copies kept on disk
+            "src/Vesktop-1.6.5",
+            "src/src",
+            "src/vesktop-gfw-proxy",
+            "src/scripts",
+            "src/packages",
+            "src/patches",
+            "src/build",
+            "src/static",
+            "src/pkg",
+            "src/gfw_resist_HTTPS_proxy"
+        ]
+    },
     {
         files: ["src/**/*.{tsx,ts,mts,mjs,js,jsx}"],
         settings: {

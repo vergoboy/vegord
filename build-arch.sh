@@ -4,7 +4,7 @@ set -e
 # Uses the same approach as makepkg for compatibility
 
 pkgname=vegord-gfw-proxy
-pkgver=1.6.7
+pkgver=1.6.11
 pkgrel=1
 pkgdir="/tmp/${pkgname}-pkg"
 srcdir="$(cd "$(dirname "$0")" && pwd)"
@@ -46,8 +46,17 @@ EOF
 # Startup script
 install -Dm755 /dev/stdin "$pkgdir/opt/vegord/vegord.sh" <<'SCRIPT'
 #!/bin/bash
-# Unset LD_PRELOAD to avoid GDK/GTK crashes (e.g. libgtk4-layer-shell.so)
-unset LD_PRELOAD
+# libgtk4-layer-shell preloaded via LD_PRELOAD crashes Electron's GTK init with
+# "gdk_display_manager_get() was called before gtk_init()" (SIGABRT, GTK >= 4.18).
+# Strip only that library from LD_PRELOAD and keep any other preloaded entries.
+if [ -n "$LD_PRELOAD" ]; then
+    LD_PRELOAD="$(printf '%s' "$LD_PRELOAD" | tr ':' '\n' | grep -v 'libgtk4-layer-shell' | paste -sd: -)"
+    if [ -n "$LD_PRELOAD" ]; then
+        export LD_PRELOAD
+    else
+        unset LD_PRELOAD
+    fi
+fi
 # --class=vegord matches StartupWMClass in the .desktop file so the
 # taskbar/titlebar show the Vegcord icon instead of the default Electron one
 exec /usr/bin/electron --class=vegord /opt/vegord/dist/js/main.js "$@"

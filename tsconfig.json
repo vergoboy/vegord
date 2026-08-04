@@ -19,5 +19,13 @@
 
         "types": ["node", "@vencord/types"]
     },
-    "include": ["src/**/*"]
+    "include": ["src/**/*"],
+    "exclude": [
+        "src/Vesktop-1.6.5",
+        "src/src",
+        "src/vesktop-gfw-proxy",
+        "src/scripts",
+        "src/packages",
+        "src/patches"
+    ]
 }

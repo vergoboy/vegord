@@ -29,7 +29,7 @@ import { autoStart } from "./autoStart";
 import { enableHardwareAcceleration } from "./main";
 import { mainWin } from "./mainWindow";
 import { Settings, State } from "./settings";
-import { requestSettingsSync, startSettingsSync } from "./settingsSync";
+import { requestSettingsSync } from "./settingsSync";
 import { handle, handleSync } from "./utils/ipcWrappers";
 import { PopoutWindows } from "./utils/popout";
 import { isDeckGameMode, showGamePage } from "./utils/steamOS";

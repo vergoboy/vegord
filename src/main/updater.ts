@@ -5,7 +5,6 @@
  */
 
 import { autoUpdater } from "electron-updater";
-
 import { IpcEvents } from "shared/IpcEvents";
 
 import { handle } from "./utils/ipcWrappers";

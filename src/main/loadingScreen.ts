@@ -8,8 +8,8 @@ import { BrowserWindow } from "electron";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
-import { Settings } from "./settings";
 import { DATA_DIR } from "./constants";
+import { Settings } from "./settings";
 
 // Themed loading overlay injected into the Discord window while it loads,
 // mirroring the splash screen (blobs, spinning logo, glass panel).

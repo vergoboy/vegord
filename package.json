@@ -18,7 +18,7 @@
         "buildLibVegcord": "pnpm -C packages/libvegord install && pnpm -C packages/libvegord run build",
         "package": "pnpm build && electron-builder",
         "package:dir": "pnpm build && electron-builder --dir",
-        "lint": "eslint",
+        "lint": "eslint --config eslint.config.mjs",
         "lint:fix": "pnpm lint --fix",
         "start": "pnpm build && electron .",
         "start:dev": "pnpm build:dev && electron .",
