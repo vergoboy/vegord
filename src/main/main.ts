@@ -9,11 +9,11 @@ import "./updater";
 import "./ipc";
 import "./userAssets";
 import "./vegordProtocol";
-
-import { existsSync } from "fs";
-import { join } from "path";
+import "./vegordUpload";
 
 import { app, BrowserWindow, dialog, nativeTheme } from "electron";
+import { existsSync } from "fs";
+import { join } from "path";
 
 import { startAnnouncements } from "./announcements";
 import { flushBeforeQuit, logInfo, startConnectionLog } from "./connectionLog";

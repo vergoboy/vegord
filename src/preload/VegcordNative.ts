@@ -54,8 +54,7 @@ export const VegcordNative = {
             invoke<void>(IpcEvents.TELEMETRY_SET_NETWORK, network)
     },
     sync: {
-        setUser: (user: { id: string; username: string } | null) =>
-            invoke<void>(IpcEvents.SYNC_SET_USER, user)
+        setUser: (user: { id: string; username: string } | null) => invoke<void>(IpcEvents.SYNC_SET_USER, user)
     },
     fileManager: {
         isUsingCustomVencordDir: () => sendSync<boolean>(IpcEvents.IS_USING_CUSTOM_VENCORD_DIR),
@@ -117,5 +116,14 @@ export const VegcordNative = {
             ipcRenderer.on(IpcEvents.IPC_COMMAND, (_, message) => cb(message));
         },
         respond: (response: IpcResponse) => ipcRenderer.send(IpcEvents.IPC_COMMAND, response)
+    },
+    upload: {
+        pick: () =>
+            invoke<{ canceled: true } | { url: string; name: string; size: number } | { error: string }>(
+                IpcEvents.VEGORD_UPLOAD
+            ),
+        onProgress(cb: (p: { sent: number; total: number }) => void) {
+            ipcRenderer.on(IpcEvents.VEGORD_UPLOAD_PROGRESS, (_e, p: { sent: number; total: number }) => cb(p));
+        }
     }
 };
