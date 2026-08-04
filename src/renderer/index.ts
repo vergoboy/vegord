@@ -5,6 +5,7 @@
  */
 
 import "./themedSplash";
+import "./vegordEmoji.css";
 import "./ipcCommands";
 import "./appBadge";
 import "./fixes";
