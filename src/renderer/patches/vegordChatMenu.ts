@@ -10,8 +10,8 @@
  * Pure DOM implementation. It deliberately avoids Vencord's ChatButtons API: the
  * _injectButtons patch no longer matches modern Discord's chat bar, so buttons
  * registered via addChatBarButton are silently never rendered. Instead the ⋮
- * button is injected into the chat bar's right-side button cluster (next to the
- * emoji button, so its menu can open upward inside the chat card) and the
+ * button is injected inside the chat bar's attach wrapper (where the hidden
+ * "+" button lived), so it matches the rest of the bar's buttons, and the
  * expression-picker tabs get clones of Discord's own chat bar icons.
  *
  * The renderer runs from the preload (webFrame.executeJavaScript) before
@@ -23,6 +23,10 @@
  * The menu/upload panel are appended to <body>, outside #app-mount, where
  * Discord's theme CSS variables do not cascade; they use an explicit
  * semi-transparent surface with backdrop blur and hard-coded color fallbacks.
+ * They are anchored to the chat card so they always stay inside it instead of
+ * sliding over the channel list. Uploaded files come back from the main
+ * process as raw bytes (the renderer can't fetch the external URL due to
+ * CORS), are rebuilt into a File, and dropped into the composer.
  */
 
 type UploadState =
@@ -49,12 +53,11 @@ const SURFACE_CSS =
     "border:1px solid rgba(255,255,255,.08);box-shadow:0 8px 16px rgba(0,0,0,.35),0 4px 8px rgba(0,0,0,.2);" +
     "border-radius:8px;color:#dbdee1;user-select:none;box-sizing:border-box;" +
     'font-family:"Twemoji Mozilla",Whitney,"Helvetica Neue",Helvetica,Arial,sans-serif;';
-
 function chatBarRect(): DOMRect | null {
     return document.querySelector<HTMLElement>(CHAT_BAR_SELECTOR)?.getBoundingClientRect() ?? null;
 }
 
-/* Anchor above the chat bar, inset a bit from its right edge so the panel stays
+/* Anchor above the chat bar, inset from its right edge so the panel stays
    inside the chat card instead of sliding over the member list. */
 function panelPosition(): string {
     const r = chatBarRect();
@@ -63,18 +66,25 @@ function panelPosition(): string {
     return `right:${right}px;bottom:${bottom}px;`;
 }
 
-/* Anchor above the ⋮ button, right-aligned to it so the menu opens inside the
-   chat card. If the menu would overflow the window's left edge (e.g. when the
-   button sits mid-bar), flip it to open rightward from the button instead. */
+/* Anchor the menu above the ⋮ button but keep it inside the chat card: if the
+   button is in the left half of the bar the menu opens rightward (never over
+   the channel/contact list), otherwise it opens upward right-aligned to the
+   button. */
 function menuPosition(): string {
-    const r = buttonAnchor?.getBoundingClientRect();
-    if (!r) return "right:16px;bottom:90px;";
-    const bottom = Math.max(8, window.innerHeight - r.top);
-    const fitsRight = r.right - MENU_WIDTH >= 8;
-    const horiz = fitsRight ? `right:${Math.max(8, window.innerWidth - r.right)}px` : `left:${Math.max(8, r.left)}px`;
-    return `${horiz};bottom:${bottom}px;`;
+    const b = buttonAnchor?.getBoundingClientRect();
+    if (!b) return "right:16px;bottom:90px;";
+    const bottom = Math.max(8, window.innerHeight - b.top);
+    const bar = chatBarRect();
+    if (bar) {
+        const buttonCenter = b.left + b.width / 2;
+        const barCenter = bar.left + bar.width / 2;
+        if (buttonCenter < barCenter) {
+            const left = Math.max(bar.left + 8, b.left);
+            return `left:${left}px;bottom:${bottom}px;`;
+        }
+    }
+    return `right:${Math.max(8, window.innerWidth - b.right)}px;bottom:${bottom}px;`;
 }
-
 function moreIconSvg() {
     return `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>`;
 }
@@ -171,11 +181,7 @@ async function startUpload() {
             return;
         }
         setUpload({ status: "uploading", name: result.name, sent: 0, total: 0 });
-        const blob = await fetch(result.url).then(r => {
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
-            return r.blob();
-        });
-        const file = new File([blob], result.name, { type: blob.type || "application/octet-stream" });
+        const file = new File([new Uint8Array(result.bytes)], result.name, { type: guessMime(result.name) });
         if (!dropFileIntoComposer(file)) throw new Error("Could not find the message composer");
         setUpload({ status: "done", url: result.url, name: result.name });
     } catch (e) {
@@ -187,6 +193,50 @@ async function startUpload() {
 
 function escapeHtml(s: string) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/* Discord guesses attachment types from the File's MIME, so map the file
+   extension to something sane before we rebuild the File from IPC bytes. */
+const MIME_BY_EXT: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    bmp: "image/bmp",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    mkv: "video/x-matroska",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    ogg: "audio/ogg",
+    flac: "audio/flac",
+    m4a: "audio/mp4",
+    pdf: "application/pdf",
+    txt: "text/plain",
+    md: "text/markdown",
+    json: "application/json",
+    zip: "application/zip",
+    rar: "application/vnd.rar",
+    "7z": "application/x-7z-compressed",
+    tar: "application/x-tar",
+    gz: "application/gzip",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    csv: "text/csv",
+    psd: "image/vnd.adobe.photoshop",
+    ai: "application/postscript",
+    iso: "application/x-iso9660-image",
+    apk: "application/vnd.android.package-archive",
+    exe: "application/octet-stream"
+};
+function guessMime(name: string) {
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    return MIME_BY_EXT[ext] || "application/octet-stream";
 }
 
 function openNativeMoreMenuAndClick(label: string) {
@@ -299,19 +349,22 @@ function injectButton(chatBar: HTMLElement) {
         buttonAnchor = button;
         toggleMenu();
     });
+    document.body.classList.add("vegord-has-more-button");
 
+    /* Sit inside the "+" (More message options) container, right where the
+       hidden plus used to be. Falls back to before the emoji picker, then to
+       the end of the bar. */
+    const attachWrapper = chatBar.querySelector<HTMLElement>('[class*="attachWrapper"]');
+    if (attachWrapper) {
+        attachWrapper.prepend(button);
+        return;
+    }
     const emojiBtn = chatBar.querySelector<HTMLElement>('[aria-label="Open emoji picker"]');
     if (emojiBtn?.parentElement) {
         emojiBtn.parentElement.insertBefore(button, emojiBtn);
     } else {
-        const attachWrapper = chatBar.querySelector<HTMLElement>('[class*="attachWrapper"]');
-        if (attachWrapper?.parentElement) {
-            attachWrapper.after(button);
-        } else {
-            chatBar.appendChild(button);
-        }
+        chatBar.appendChild(button);
     }
-    document.body.classList.add("vegord-has-more-button");
 }
 
 function scanChatBar() {

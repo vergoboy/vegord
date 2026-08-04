@@ -6,7 +6,7 @@
 
 import { dialog } from "electron";
 import { createReadStream } from "fs";
-import { stat } from "fs/promises";
+import { readFile, stat } from "fs/promises";
 import { request } from "https";
 import { basename } from "path";
 
@@ -118,9 +118,13 @@ handle(IpcEvents.VEGORD_UPLOAD, async () => {
     logInfo(`upload_start name=${fileName} size=${size}`);
     try {
         const url = await uploadFile(filePath, fileName, size);
+        // The renderer is Discord's origin and can't fetch the external URL
+        // (CORS), so hand the raw bytes over IPC to rebuild a local File for
+        // the composer drop.
+        const bytes = await readFile(filePath);
         sendProgress(size, size);
         logInfo(`upload_ok ${url}`);
-        return { url, name: fileName, size };
+        return { url, name: fileName, size, bytes };
     } catch (err) {
         const { message } = err as Error;
         logWarn(`upload_failed ${message}`);
