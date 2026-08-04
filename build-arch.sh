@@ -4,7 +4,7 @@ set -e
 # Uses the same approach as makepkg for compatibility
 
 pkgname=vegord-gfw-proxy
-pkgver=1.6.11
+pkgver=1.7.1
 pkgrel=1
 pkgdir="/tmp/${pkgname}-pkg"
 srcdir="$(cd "$(dirname "$0")" && pwd)"
@@ -16,6 +16,23 @@ mkdir -p "$pkgdir/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$pkgdir/usr/share/applications"
 mkdir -p "$pkgdir/usr/bin"
 mkdir -p "$pkgdir/opt/vegord/static/gfw_proxy/logs"
+
+# Ship the native Linux proxy binary. The Rust proxy is the only backend now,
+# so build it with cargo; there is no prebuilt binary to fall back to.
+GFW_BIN=""
+if command -v cargo >/dev/null 2>&1; then
+    if (cd "$srcdir/gfw_proxy_rs" && cargo build --release) >/dev/null 2>&1; then
+        GFW_BIN="$srcdir/gfw_proxy_rs/target/release/gfw_proxy"
+    fi
+fi
+if [ -n "$GFW_BIN" ] && [ -x "$GFW_BIN" ]; then
+    cp "$GFW_BIN" "$srcdir/static/gfw_proxy/gfw_proxy"
+    chmod +x "$srcdir/static/gfw_proxy/gfw_proxy"
+    echo "Packaged native Linux proxy: $GFW_BIN"
+else
+    echo "ERROR: no Linux gfw_proxy binary found (cargo build failed). The app cannot proxy without it." >&2
+    exit 1
+fi
 
 # Copy built files
 cp -r "$srcdir/dist/js" "$pkgdir/opt/vegord/dist/"
@@ -72,7 +89,9 @@ install -Dm755 /dev/stdin "$pkgdir/usr/bin/vegord-gfw-proxy" <<'SCRIPT'
 exec /opt/vegord/vegord.sh "$@"
 SCRIPT
 
-# Clean pycache
+# The Rust proxy is the only backend: strip any leftover Python files from the
+# staged static dir so the package never ships the removed fallback.
+find "$pkgdir/opt/vegord/static" -name '*.py' -delete 2>/dev/null || true
 find "$pkgdir/opt/vegord/static" -name '__pycache__' -type d -prune -exec rm -rf {} \; 2>/dev/null || true
 find "$pkgdir/opt/vegord/static" -name '*.pyc' -delete 2>/dev/null || true
 
@@ -94,9 +113,6 @@ depend = electron>=43
 depend = libxss
 depend = libxtst
 depend = glibc
-optdepend = python
-optdepend = python-dnspython
-optdepend = python-requests
 conflict = vesktop-gfw-proxy
 provides = vegord-gfw
 EOF

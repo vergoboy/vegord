@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
-use tokio::time::timeout;
+use tokio::time::{timeout, Instant};
 
 use crate::config::Config;
 use crate::discord::DiscordManager;
@@ -174,7 +174,7 @@ impl ProxyServer {
     }
 
     async fn handle_udp_associate(&self, mut client: TcpStream) {
-        let udp_socket = match UdpSocket::bind("0.0.0.0:0").await {
+        let udp_socket = match UdpSocket::bind("127.0.0.1:0").await {
             Ok(s) => s,
             Err(_) => {
                 let _ = client
@@ -205,22 +205,46 @@ impl ProxyServer {
             return;
         }
 
-        // Spawn UDP relay loop while TCP connection remains active
+        // Spawn UDP relay loop while TCP connection remains active. The relay
+        // is voice-health-aware (spec section 5.2): a heartbeat task watches
+        // for traffic from the target and, when the route is dead, transparently
+        // fails over to the next-best Discord IP from the ranked pool instead of
+        // silently breaking the voice channel.
         let stats = Arc::clone(&self.stats);
+        let discord = Arc::clone(&self.discord);
+        let udp_heartbeat_sec = self.config.udp_heartbeat_sec;
+        let udp_loss_window_sec = self.config.udp_loss_window_sec;
         tokio::spawn(async move {
             let mut buf = [0u8; 65535];
             let mut client_udp_addr: Option<SocketAddr> = None;
+            // target we relay to (Discord voice server), mutable for failover.
+            let mut target_addr: Option<SocketAddr> = None;
+            let mut last_target_seen: Option<Instant> = None;
+            let mut consecutive_misses: u32 = 0;
+            let mut last_traffic: Option<Instant> = None;
+            // Loss-window bookkeeping: count 1-second ticks without a target
+            // packet and feed the resulting ratio into the DiscordManager so the
+            // voice path is scored by loss, not just RTT (spec section 5.2).
+            let mut tick_count: u64 = 0;
+            let mut miss_count: u64 = 0;
+            let mut got_target_packet: bool = false;
 
             loop {
-                let res = udp_socket.recv_from(&mut buf).await;
-                match res {
-                    Ok((n, src_addr)) => {
+                let recv = tokio::time::timeout(
+                    Duration::from_secs(1),
+                    udp_socket.recv_from(&mut buf),
+                )
+                .await;
+
+                match recv {
+                    Ok(Ok((n, src_addr))) => {
                         if client_udp_addr.is_none() {
                             client_udp_addr = Some(src_addr);
                         }
 
                         if Some(src_addr) == client_udp_addr {
-                            // Packet coming from client -> extract SOCKS5 UDP header & forward to target
+                            // Packet coming from client -> extract SOCKS5 UDP header
+                            // and forward to the (possibly failover-swapped) target.
                             if n > 10 {
                                 let frag = buf[2];
                                 if frag == 0 {
@@ -249,14 +273,30 @@ impl ProxyServer {
 
                                     if let (Some(target_ip), true) = (target_ip_opt, header_len > 0 && n > header_len) {
                                         let payload = &buf[header_len..n];
-                                        let dest_addr = SocketAddr::new(target_ip, target_port);
+                                        // Discord sends to the literal voice IP; remember the
+                                        // original so failover can swap the IP silently.
+                                        if target_addr.is_none() {
+                                            target_addr = Some(SocketAddr::new(target_ip, target_port));
+                                        }
+                                        let dest_addr = target_addr
+                                            .map(|mut a| {
+                                                a.set_ip(target_ip);
+                                                a
+                                            })
+                                            .unwrap_or(SocketAddr::new(target_ip, target_port));
+
                                         let _ = udp_socket.send_to(payload, dest_addr).await;
                                         stats.record_ul(target_ip, payload.len() as u64);
+                                        last_traffic = Some(Instant::now());
                                     }
                                 }
                             }
                         } else {
-                            // Packet coming from target server -> encapsulate in SOCKS5 UDP header & send to client
+                            // Packet coming from target server -> encapsulate in
+                            // SOCKS5 UDP header & send to client.
+                            last_target_seen = Some(Instant::now());
+                            consecutive_misses = 0;
+                            got_target_packet = true;
                             if let Some(c_addr) = client_udp_addr {
                                 let mut packet = vec![0x00, 0x00, 0x00, 0x01];
                                 match src_addr.ip() {
@@ -271,7 +311,79 @@ impl ProxyServer {
                             }
                         }
                     }
-                    Err(_) => break,
+                    Ok(Err(_)) => {
+                        // Transient UDP error is not fatal: keep the channel alive.
+                        continue;
+                    }
+                    Err(_) => {
+                        // recv timeout -> run heartbeat bookkeeping.
+                        if last_traffic.is_none() {
+                            continue;
+                        }
+                        // Loss-window measurement: one 1s tick happened and no
+                        // target packet arrived in it (unless got_target_packet).
+                        tick_count += 1;
+                        if !got_target_packet {
+                            miss_count += 1;
+                        }
+                        got_target_packet = false;
+                        if tick_count >= udp_heartbeat_sec {
+                            let pct = (miss_count as f64 / tick_count as f64) * 100.0;
+                            if let Some(t) = target_addr {
+                                discord.note_loss_sample(t.ip(), pct);
+                                if pct > 0.0 {
+                                    println!(
+                                        "[{}] [VOICE] loss for {} = {:.1}% (window={}s)",
+                                        now_iso(),
+                                        t.ip(),
+                                        pct,
+                                        tick_count
+                                    );
+                                }
+                            }
+                            tick_count = 0;
+                            miss_count = 0;
+                        }
+                        let now = Instant::now();
+                        let idle = now.duration_since(last_traffic.unwrap());
+                        if idle > Duration::from_secs(udp_loss_window_sec) {
+                            let since_target = last_target_seen
+                                .map(|t| now.duration_since(t))
+                                .unwrap_or(Duration::from_secs(0));
+                            if since_target > Duration::from_secs(udp_loss_window_sec) {
+                                consecutive_misses += 1;
+                                if consecutive_misses >= 2 {
+                                    // Route is dead: fail over to the next-best
+                                    // Discord IP from the ranked pool.
+                                    if let Some(t) = target_addr {
+                                        let next = discord.next_best_ip(Some(t.ip()));
+                                        if let Some(next_ip) = next {
+                                            if next_ip != t.ip() {
+                                                target_addr = Some(SocketAddr::new(next_ip, t.port()));
+                                                consecutive_misses = 0;
+                                                println!(
+                                                    "[{}] [VOICE FAILOVER] {} -> {} (heartbeat missed)",
+                                                    now_iso(),
+                                                    t.ip(),
+                                                    next_ip
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Heartbeat: log voice health periodically.
+                        if let Some(t) = target_addr {
+                            if last_target_seen.is_none() {
+                                println!(
+                                    "[{}] [VOICE] relay active to {}, waiting for first target packet",
+                                    now_iso(),
+                                    t
+                                );
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -403,12 +515,9 @@ impl ProxyServer {
         self.stats.conn_total.fetch_add(1, Ordering::Relaxed);
         let addr = SocketAddr::new(ip, port);
 
-        // Adjust timeout for voice/RTC connections
-        let timeout_sec = if port == 50001 {
-            self.config.voice_socket_timeout_sec
-        } else {
-            self.config.socket_timeout_sec
-        };
+        // Phase-specific connect deadline (spec section 5.3): the TCP connect
+        // has its own budget independent of the handshake / idle / bulk phases.
+        let timeout_sec = self.config.connect_deadline_sec;
 
         let stream_res = timeout(Duration::from_secs(timeout_sec), TcpStream::connect(addr)).await;
         match stream_res {
@@ -626,7 +735,16 @@ impl ProxyServer {
         let ip = targets[ip_idx];
         self.stats.record_ul(ip, first_n as u64);
 
-        // Bi-directional async forwarding
+        // Bi-directional async forwarding, half-close aware (spec section 5.1).
+        //
+        // The old code used `tokio::select!`, which cancelled the other task the
+        // moment either direction finished — dropping buffered upload bytes when
+        // a server sent an early response / 100-continue. Instead each direction
+        // runs to completion independently (tokio::join!). When one direction
+        // hits EOF it performs a real TCP half-close (shutdown) on the opposite
+        // write half, and the connection is only torn down once BOTH directions
+        // have finished. An overall bulk-transfer deadline is the only way the
+        // relay is force-closed (guards genuinely dead connections).
         let (mut cr, mut cw) = client.split();
         let (mut br, mut bw) = backend.split();
 
@@ -637,7 +755,10 @@ impl ProxyServer {
             let mut buf = [0u8; 16384];
             loop {
                 match cr.read(&mut buf).await {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        let _ = bw.shutdown().await;
+                        break;
+                    }
                     Ok(n) => {
                         if bw.write_all(&buf[..n]).await.is_err() {
                             break;
@@ -653,7 +774,10 @@ impl ProxyServer {
             let mut buf = [0u8; 16384];
             loop {
                 match br.read(&mut buf).await {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        let _ = cw.shutdown().await;
+                        break;
+                    }
                     Ok(n) => {
                         if cw.write_all(&buf[..n]).await.is_err() {
                             break;
@@ -665,9 +789,23 @@ impl ProxyServer {
             }
         };
 
+        let deadline = tokio::time::sleep(Duration::from_secs(self.config.bulk_transfer_deadline_sec));
+        tokio::pin!(deadline);
+        let relay = async {
+            let _ = tokio::join!(client_to_backend, backend_to_client);
+        };
+        tokio::pin!(relay);
         tokio::select! {
-            _ = client_to_backend => {},
-            _ = backend_to_client => {},
+            _ = &mut deadline => {
+                println!(
+                    "[{}] [RELAY DEADLINE] {}:{} exceeded {}s, closing",
+                    now_iso(),
+                    host,
+                    port,
+                    self.config.bulk_transfer_deadline_sec
+                );
+            }
+            _ = &mut relay => {}
         }
     }
 }

@@ -3,6 +3,7 @@ mod control;
 mod discord;
 mod doh;
 mod fragment;
+mod preset;
 mod proxy;
 mod stats;
 
@@ -38,6 +39,18 @@ async fn main() -> std::io::Result<()> {
     } else {
         config.control_port = config.listen_port + 1;
     }
+    if let Ok(token) = env::var("VEGORD_PROXY_CONTROL_TOKEN") {
+        config.control_token = token;
+    }
+    if let Ok(v) = env::var("VEGORD_PRESET_SYNC") {
+        config.preset_sync_enabled = v == "1" || v.eq_ignore_ascii_case("true");
+    }
+    if let Ok(base) = env::var("VEGORD_PANEL_BASE") {
+        config.panel_base_url = base;
+    }
+    if let Ok(token) = env::var("VEGORD_PANEL_UPLOAD_TOKEN") {
+        config.panel_upload_token = token;
+    }
 
     // CLI argument parsing
     let args: Vec<String> = env::args().collect();
@@ -54,6 +67,10 @@ async fn main() -> std::io::Result<()> {
                 config.data_dir = PathBuf::from(&args[i + 1]);
                 i += 2;
             }
+            "--control-token" if i + 1 < args.len() => {
+                config.control_token = args[i + 1].clone();
+                i += 2;
+            }
             "--num-fragment" if i + 1 < args.len() => {
                 if let Ok(n) = args[i + 1].parse::<usize>() {
                     config.num_fragment = n;
@@ -66,6 +83,10 @@ async fn main() -> std::io::Result<()> {
                 }
                 i += 2;
             }
+            "--preset-sync" if i + 1 < args.len() => {
+                config.preset_sync_enabled = args[i + 1] == "1" || args[i + 1].eq_ignore_ascii_case("true");
+                i += 2;
+            }
             _ => {
                 i += 1;
             }
@@ -76,8 +97,12 @@ async fn main() -> std::io::Result<()> {
         let _ = std::fs::create_dir_all(&config.data_dir);
     }
 
+    // Apply the last known-good preset (local benchmark or downloaded server
+    // preset) before anything else touches the config.
+    preset::apply_preset_to_config(&mut config);
+
     println!(
-        "[{}] [INIT] Vegord Rust GFW Proxy v3.1.1 starting on port {} (data dir: {})",
+        "[{}] [INIT] Vegord Rust GFW Proxy v3.2.0 starting on port {} (data dir: {})",
         stats::now_iso(),
         config.listen_port,
         config.data_dir.display()
@@ -94,8 +119,10 @@ async fn main() -> std::io::Result<()> {
     stats_mgr.clone().start_log_writer();
 
     // Bind the proxy listener BEFORE spawning dependent tasks so the startup
-    // DoH probe can route through the proxy immediately.
-    let bind_addr = format!("0.0.0.0:{}", config.listen_port);
+    // DoH probe can route through the proxy immediately. Bound to 127.0.0.1
+    // only: the Electron main process is the sole consumer (spec section 3,
+    // security). Exposing a forward proxy on 0.0.0.0 would open it to the LAN.
+    let bind_addr = format!("127.0.0.1:{}", config.listen_port);
     let listener = TcpListener::bind(&bind_addr).await?;
     println!(
         "[{}] [START] Rust GFW Proxy Listening on {}",
@@ -112,11 +139,21 @@ async fn main() -> std::io::Result<()> {
     });
 
     // Localhost control API for the Electron main process.
-    tokio::spawn(control::run_control_server(
-        Arc::clone(&doh_client),
-        Arc::clone(&discord_mgr),
-        config.control_port,
-    ));
+    let ctrl_doh = Arc::clone(&doh_client);
+    let ctrl_discord = Arc::clone(&discord_mgr);
+    let ctrl_token = config.control_token.clone();
+    tokio::spawn(async move {
+        control::run_control_server(ctrl_doh, ctrl_discord, config.control_port, &ctrl_token).await;
+    });
+
+    // ISP-aware preset sync: benchmark this network, save a local preset,
+    // fetch/apply a validated server preset when available (spec section 4).
+    let preset_doh = Arc::clone(&doh_client);
+    let preset_discord = Arc::clone(&discord_mgr);
+    let preset_cfg = config.clone();
+    tokio::spawn(async move {
+        preset::run_preset_sync(preset_cfg, preset_doh, preset_discord).await;
+    });
 
     // Start proxy server
     let proxy_server = ProxyServer::new(

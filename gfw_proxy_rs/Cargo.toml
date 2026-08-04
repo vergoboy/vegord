@@ -1,13 +1,13 @@
 [package]
 name = "gfw_proxy"
-version = "3.1.0"
+version = "3.2.0"
 edition = "2021"
 authors = ["Vergoboy <vergoboy@riseup.net>"]
 description = "GFW-Resistant High-Performance SOCKS5/HTTP Proxy with TLS ClientHello Fragmentation, Multi-DoH Racing, and Discord Voice/Video Optimization in Rust"
 
 [dependencies]
 tokio = { version = "1.40", features = ["full"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json"] }
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -48,7 +48,11 @@ const PROXY_LOG_MARKERS = [
     "[DoH ERR]",
     "[DNS FAIL]",
     "[FILTERED]",
-    "[DISCORD]"
+    "[DISCORD]",
+    "[VOICE FAILOVER]",
+    "[PRESET]",
+    "[FRAG]",
+    "[RELAY DEADLINE]"
 ];
 
 function getProxyDir() {
@@ -93,7 +97,6 @@ function findRustBinary(dir: string): string | null {
 function spawnProxy() {
     const dir = getProxyDir();
     const rustBinary = findRustBinary(dir);
-    const script = join(dir, "pyprox_HTTPS_v3.0.py");
 
     const logPrefix = "[GFW Proxy]";
 
@@ -106,35 +109,23 @@ function spawnProxy() {
 
     let child: ChildProcess | null = null;
     try {
-        if (rustBinary) {
-            console.log(`${logPrefix} Starting high-performance Rust proxy binary at ${rustBinary}`);
-            logInfo(`proxy_start rust binary=${rustBinary}`);
-            child = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
-                cwd: dirname(rustBinary),
-                stdio: ["ignore", "pipe", "pipe"],
-                env: {
-                    ...process.env,
-                    VEGORD_PROXY_DATA_DIR: proxyDataDir,
-                    VEGORD_PROXY_PORT: String(PROXY_PORT)
-                }
-            });
-        } else if (existsSync(script)) {
-            console.log(`${logPrefix} Rust binary not found, falling back to Python script at ${script}`);
-            logWarn("proxy_fallback python script");
-            // On Windows the interpreter is usually "python", not "python3"
-            const pythonBin = process.platform === "win32" ? "python" : "python3";
-            child = spawn(pythonBin, [script], {
-                cwd: dir,
-                stdio: ["ignore", "pipe", "pipe"],
-                env: { ...process.env, PYTHONUNBUFFERED: "1", VEGORD_PROXY_DATA_DIR: proxyDataDir }
-            });
-        } else {
-            console.error(
-                `${logPrefix} Neither Rust binary nor Python script found in ${dir}. Skipping proxy startup.`
-            );
-            logError("proxy_missing binary and script");
+        if (!rustBinary) {
+            console.error(`${logPrefix} Rust proxy binary not found in ${dir}. Skipping proxy startup.`);
+            logError("proxy_missing binary");
             return;
         }
+
+        console.log(`${logPrefix} Starting high-performance Rust proxy binary at ${rustBinary}`);
+        logInfo(`proxy_start rust binary=${rustBinary}`);
+        child = spawn(rustBinary, ["--port", String(PROXY_PORT), "--data-dir", proxyDataDir], {
+            cwd: dirname(rustBinary),
+            stdio: ["ignore", "pipe", "pipe"],
+            env: {
+                ...process.env,
+                VEGORD_PROXY_DATA_DIR: proxyDataDir,
+                VEGORD_PROXY_PORT: String(PROXY_PORT)
+            }
+        });
 
         proxyProcess = child;
 
@@ -322,7 +313,9 @@ async function isProxyServedByUs(): Promise<boolean> {
 }
 
 async function isProxyReady(): Promise<boolean> {
-    if (!(await isProxyHealthy())) return false;
+    if (!(await isProxyHealthy())) {
+        return false;
+    }
     // Primary ownership signal: our own child printed "[CTRL] control server
     // listening", which the Rust proxy emits only after binding the control
     // port. Cheap and works everywhere, including Windows where the netstat

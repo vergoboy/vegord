@@ -94,10 +94,9 @@ jobs:
       - name: Install makepkg deps
         run: |
           sudo apt update
-          sudo apt install -y python3 python3-dnspython python3-requests nodejs pnpm
+          sudo apt install -y nodejs pnpm
           pnpm install
           pnpm build
-          cp -r gfw_resist_HTTPS_proxy static/gfw_proxy
 
       - name: Package
         run: |

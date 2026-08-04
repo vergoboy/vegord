@@ -2,12 +2,12 @@
 
 A custom Discord desktop app with a **built-in GFW-resistant proxy** for regions where Discord is throttled or blocked.
 
-Fork of [Vesktop](https://github.com/Vencord/Vesktop) with Vencord preinstalled plus a high-performance Rust SOCKS5/HTTP proxy (with a Python fallback) that tunnels Discord traffic past Deep Packet Inspection and DNS poisoning.
+Fork of [Vesktop](https://github.com/Vencord/Vesktop) with Vencord preinstalled plus a high-performance Rust SOCKS5/HTTP proxy that tunnels Discord traffic past Deep Packet Inspection and DNS poisoning.
 
 ## Features
 
 - **Everything from upstream Vesktop**: Vencord preinstalled, lightweight, Linux screenshare with sound & Wayland
-- **Built-in GFW-resistant proxy**: high-performance Rust proxy (`gfw_proxy_rs`) exposing SOCKS5 on `127.0.0.1:4500`, with a Python fallback (`pyprox_HTTPS_v3.0.py`)
+- **Built-in GFW-resistant proxy**: high-performance Rust proxy (`gfw_proxy_rs`) exposing SOCKS5 on `127.0.0.1:4500`
 - **DNS-over-HTTPS (DoH)**: resolves via 37+ DoH servers (Cloudflare, Google, Quad9, ...) to bypass DNS poisoning
 - **TCP fragmentation**: splits the TLS ClientHello into fragments to evade DPI
 - **Smart Discord IP routing**: pings discovered Discord IPs and routes to the fastest one, with an offline DNS cache as fallback
@@ -97,7 +97,7 @@ vegord --proxy-server="http://127.0.0.1:8080"
 
 ## How the Proxy Works
 
-On startup the app spawns the Rust binary `gfw_proxy` (`gfw_proxy.exe` on Windows) from `static/gfw_proxy/`. If the Rust binary is unavailable it falls back to the Python script `pyprox_HTTPS_v3.0.py`.
+On startup the app spawns the Rust binary `gfw_proxy` (`gfw_proxy.exe` on Windows) from `static/gfw_proxy/`.
 
 1. **SOCKS5 on `127.0.0.1:4500`** — Electron routes all Discord traffic through it
 2. **DNS-over-HTTPS (DoH)** — bypasses DNS poisoning via racing DoH servers
@@ -107,17 +107,14 @@ On startup the app spawns the Rust binary `gfw_proxy` (`gfw_proxy.exe` on Window
 
 ### Configuration
 
-The Rust proxy is configured via CLI flags (`--port`, `--data-dir`) in `src/main/gfwProxy.ts`. For the Python fallback, edit `gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py`:
+The Rust proxy is configured via CLI flags (`--port`, `--data-dir`) in `src/main/gfwProxy.ts` and environment variables (`VEGORD_PROXY_*`) documented in the proxy source:
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `listen_PORT` | 4500 | Local proxy port |
-| `num_fragment` | 12 | TCP fragment count (lower = less latency) |
-| `fragment_sleep` | 0.002s | Delay between fragments |
-| `my_socket_timeout` | 60s | General connection timeout |
-| `voice_socket_timeout` | 120s | Voice/TURN connection timeout |
-| `doh_timeout` | 5s | DoH query timeout |
-| `discord_ping_interval` | 10s | How often to re-ping Discord IPs |
+| `--port` | 4500 | Local proxy port |
+| `--num-fragment` | 6 | TCP fragment count (lower = less latency) |
+| `--fragment-sleep` | 1ms | Delay between fragments |
+| `--control-token` | (none) | Auth token for the localhost control API |
 
 ## Voice Troubleshooting
 
@@ -156,10 +153,8 @@ Vegord (Electron)
   │   ├── cli.ts           ← CLI flag parsing
   │   ├── mainWindow.ts    ← BrowserWindow creation
   │   └── ...
-  ├── gfw_proxy_rs/        ← High-performance Rust proxy (SOCKS5/HTTP + DoH + fragment)
-  ├── gfw_resist_HTTPS_proxy/
-  │   └── pyprox_HTTPS_v3.0.py ← Python fallback proxy
-  ├── static/gfw_proxy/    ← Proxy files (copied during build, gitignored)
+  ├── gfw_proxy_rs/        ← High-performance Rust proxy (SOCKS5/HTTP + DoH + fragment + voice UDP)
+  ├── static/gfw_proxy/    ← Native proxy binary (copied during build, gitignored)
   ├── packages/libvegord/  ← Native addon (screenshare/venmic)
   └── PKGBUILD             ← Arch Linux package definition
 ```
@@ -179,8 +174,8 @@ pnpm testTypes         # TypeScript type check
 ### Proxy Development
 
 ```sh
-# Run the Python proxy standalone:
-python3 gfw_resist_HTTPS_proxy/pyprox_HTTPS_v3.0.py
+# Run the Rust proxy standalone:
+cd gfw_proxy_rs && cargo run --release
 
 # In another terminal, test with curl:
 curl --proxy socks5://127.0.0.1:4500 https://discord.com

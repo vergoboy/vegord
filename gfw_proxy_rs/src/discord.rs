@@ -14,6 +14,21 @@ pub struct DiscordIpInfo {
     pub last_ping: u64,
     pub samples: Vec<f64>,
     pub implausible_logged: bool,
+    // Loss is measured separately from TCP RTT (spec section 5.2/4.3): the UDP
+    // voice relay feeds per-heartbeat miss ratios via note_loss_sample, and the
+    // combined score ranks a high-loss route below a slightly slower one.
+    pub loss_pct: Option<f64>,
+}
+
+// A high-loss route degrades voice quality far more than a few ms of extra RTT,
+// so 1% loss is penalized as if it added 10ms to the route.
+const LOSS_WEIGHT_MS: f64 = 10.0;
+
+fn combined_score(rtt: Option<f64>, loss_pct: Option<f64>) -> f64 {
+    match rtt {
+        None => f64::MAX,
+        Some(r) => r + loss_pct.unwrap_or(0.0) * LOSS_WEIGHT_MS,
+    }
 }
 
 pub struct DiscordManager {
@@ -57,6 +72,7 @@ impl DiscordManager {
                         last_ping: 0,
                         samples: Vec::new(),
                         implausible_logged: false,
+                        loss_pct: None,
                     },
                 );
                 println!("[{}] [DISCORD] added IP {} to ping pool", crate::stats::now_iso(), ip);
@@ -79,6 +95,40 @@ impl DiscordManager {
             .collect()
     }
 
+    /// (ip, rtt_ms, loss_pct) for every known IP — feeds the `discord_ip_scores`
+    /// field of the local preset (spec section 4.3).
+    pub fn get_ip_scores(&self) -> Vec<(IpAddr, Option<f64>, Option<f64>)> {
+        let ips = self.ips.read();
+        ips.iter()
+            .map(|(&ip, info)| (ip, info.rtt, info.loss_pct))
+            .collect()
+    }
+
+    /// Record a voice-path loss measurement (percent of missed heartbeats over
+    /// the last window) for a Discord voice IP, fed by the UDP relay.
+    pub fn note_loss_sample(&self, ip: IpAddr, loss_pct: f64) {
+        let mut ips = self.ips.write();
+        if let Some(info) = ips.get_mut(&ip) {
+            info.loss_pct = Some(loss_pct);
+        }
+    }
+
+    /// Return the best-ranked IP that is not `except`. Used by the voice
+    /// failover: when the current voice route goes dead, the relay asks for the
+    /// next-best candidate (by combined loss+RTT score) instead of guessing.
+    pub fn next_best_ip(&self, except: Option<IpAddr>) -> Option<IpAddr> {
+        let ips = self.ips.read();
+        let mut ranked: Vec<(&IpAddr, f64)> = ips
+            .iter()
+            .map(|(ip, info)| (ip, combined_score(info.rtt, info.loss_pct)))
+            .collect();
+        ranked.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        ranked
+            .into_iter()
+            .find(|(ip, _)| Some(**ip) != except)
+            .map(|(ip, _)| *ip)
+    }
+
     pub fn start_pinger(self: Arc<Self>, config: Config) {
         tokio::spawn(async move {
             let interval_dur = Duration::from_secs(config.discord_ping_interval_sec);
@@ -96,6 +146,7 @@ impl DiscordManager {
                     continue;
                 }
 
+                let mut best_score_val = f64::MAX;
                 let mut best_rtt_val = f64::MAX;
                 let mut best_ip_val: Option<IpAddr> = None;
 
@@ -132,7 +183,11 @@ impl DiscordManager {
                                 info.samples.remove(0);
                             }
                             let avg: f64 = info.samples.iter().sum::<f64>() / info.samples.len() as f64;
-                            if avg < best_rtt_val {
+                            // Rank by the combined score (RTT + loss penalty) so a
+                            // low-latency but lossy route does not beat a clean one.
+                            let score = combined_score(Some(avg), info.loss_pct);
+                            if score < best_score_val {
+                                best_score_val = score;
                                 best_rtt_val = avg;
                                 best_ip_val = Some(ip);
                             }

@@ -8,6 +8,11 @@ pub struct Config {
     pub num_fragment: usize,
     pub fragment_sleep_ms: u64,
     pub log_every_sec: u64,
+    // Raw-IP DoH servers (e.g. https://1.1.1.1, https://8.8.8.8) present a
+    // certificate whose CN/SAN is the IP literal, which reqwest's default
+    // verifier accepts. Some resolvers do not ship an IP SAN though, so this
+    // stays configurable. It is scoped to the DoH client only and defaults to
+    // true because a failing DoH handshake takes down ALL DNS.
     pub allow_insecure: bool,
     pub socket_timeout_sec: u64,
     pub voice_socket_timeout_sec: u64,
@@ -15,6 +20,11 @@ pub struct Config {
     pub relay_retries: u32,
     pub relay_retry_sleep_ms: u64,
     pub relay_handshake_timeout_sec: u64,
+    // Phase-specific deadlines (spec section 5.3): the connect timeout, the
+    // handshake timeout and the idle timeout must NOT be conflated, and the
+    // bulk-transfer deadline is an overall ceiling, not an idle ceiling.
+    pub connect_deadline_sec: u64,
+    pub bulk_transfer_deadline_sec: u64,
     pub doh_max_retries: usize,
     pub doh_max_fails_before_switch: u32,
     pub doh_blacklist_sec: u64,
@@ -25,12 +35,22 @@ pub struct Config {
     pub discord_min_rtt_ms: f64,
     pub data_dir: PathBuf,
     pub control_port: u16,
+    pub control_token: String,
     pub doh_probe_attempts: usize,
     pub doh_probe_timeout_sec: u64,
     pub doh_probe_concurrency: usize,
     pub doh_min_rescan_interval_sec: u64,
     pub doh_reconnect_window_sec: u64,
     pub doh_switch_margin_ms: f64,
+    // Voice UDP relay health check (spec section 5.2): heartbeat + failover.
+    pub udp_heartbeat_sec: u64,
+    pub udp_loss_window_sec: u64,
+    // Preset / ISP-awareness system (spec section 4).
+    pub preset_sync_enabled: bool,
+    pub panel_base_url: String,
+    pub panel_timeout_sec: u64,
+    // Consent-gated preset upload: empty disables upload entirely.
+    pub panel_upload_token: String,
 }
 
 impl Default for Config {
@@ -47,6 +67,8 @@ impl Default for Config {
             relay_retries: 3,
             relay_retry_sleep_ms: 400,
             relay_handshake_timeout_sec: 2,
+            connect_deadline_sec: 10,
+            bulk_transfer_deadline_sec: 600,
             doh_max_retries: 5,
             doh_max_fails_before_switch: 3,
             doh_blacklist_sec: 300,
@@ -57,12 +79,19 @@ impl Default for Config {
             discord_min_rtt_ms: 0.0,
             data_dir: PathBuf::from("."),
             control_port: 4501,
+            control_token: String::new(),
             doh_probe_attempts: 2,
             doh_probe_timeout_sec: 4,
             doh_probe_concurrency: 8,
             doh_min_rescan_interval_sec: 300,
             doh_reconnect_window_sec: 120,
             doh_switch_margin_ms: 50.0,
+            udp_heartbeat_sec: 3,
+            udp_loss_window_sec: 15,
+            preset_sync_enabled: true,
+            panel_base_url: "https://vergoboy.ir/vegord/api/v1".to_string(),
+            panel_timeout_sec: 6,
+            panel_upload_token: String::new(),
         }
     }
 }

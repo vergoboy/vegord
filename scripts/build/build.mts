@@ -6,7 +6,7 @@
 
 import { BuildContext, BuildOptions, context } from "esbuild";
 import { execFileSync } from "child_process";
-import { copyFile, cp, mkdir, readdir } from "fs/promises";
+import { copyFile, mkdir, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 
@@ -56,26 +56,6 @@ async function copyVenmic() {
     ]).catch(() => console.warn("Failed to copy venmic. Building without venmic support"));
 }
 
-const EXCLUDE_DIRS = new Set([".venv", ".git", "__pycache__", "Android", "asset"]);
-
-async function copyGfwProxy(srcDir: string, destDir: string) {
-    console.log(`Copying GFW proxy files from ${srcDir} to ${destDir}...`);
-    await mkdir(destDir, { recursive: true });
-    const entries = await readdir(srcDir, { withFileTypes: true });
-    await Promise.all(
-        entries.map(async entry => {
-            const s = join(srcDir, entry.name);
-            const d = join(destDir, entry.name);
-            if (entry.isDirectory()) {
-                if (EXCLUDE_DIRS.has(entry.name)) return;
-                await copyGfwProxy(s, d);
-            } else if (entry.isFile()) {
-                await copyFile(s, d);
-            }
-        })
-    );
-}
-
 async function buildRustProxy() {
     const cargo = process.platform === "win32" ? "cargo.exe" : "cargo";
     console.log("Building Rust GFW proxy (cargo build --release)...");
@@ -88,19 +68,23 @@ async function buildRustProxy() {
     }
 }
 
+// The Rust proxy is the only backend: static/gfw_proxy is rebuilt from scratch
+// every time and contains just the native binary (the Python fallback was
+// removed, see gfwProxy.ts).
 async function copyGfwProxyWrapper() {
-    const src = "./gfw_resist_HTTPS_proxy";
     const dest = "./static/gfw_proxy";
-    await copyGfwProxy(src, dest).catch(err =>
-        console.warn("Failed to copy GFW proxy files:", err.message)
-    );
-    await buildRustProxy();
+    await rm(dest, { recursive: true, force: true });
+    await mkdir(dest, { recursive: true });
+
+    const ok = await buildRustProxy();
     const binName = process.platform === "win32" ? "gfw_proxy.exe" : "gfw_proxy";
     const rustBin = join("gfw_proxy_rs", "target", "release", binName);
-    if (existsSync(rustBin)) {
+    if (ok && existsSync(rustBin)) {
         await copyFile(rustBin, join(dest, binName));
         console.log(`Copied compiled Rust gfw_proxy binary (${binName}) into static/gfw_proxy/`);
+        return;
     }
+    throw new Error("Rust proxy build failed and no prebuilt binary exists; refusing to ship without a proxy");
 }
 
 async function copyLibVegcord() {

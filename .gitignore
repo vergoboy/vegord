@@ -8,11 +8,6 @@ pkg/
 static/gfw_proxy/
 *.pkg.tar.zst
 *.tar.gz
-gfw_resist_HTTPS_proxy/DNS_IP_traffic_info.txt
-gfw_resist_HTTPS_proxy/DoH_switch_log.txt
-gfw_resist_HTTPS_proxy/Android/
-gfw_resist_HTTPS_proxy/asset/
-gfw_resist_HTTPS_proxy/__pycache__/
 
 # Logs
 chatlog.log
@@ -20,7 +15,6 @@ chatlog.log
 
 # Stray built binaries
 /gfw_proxy.exe
-/gfw_resist_HTTPS_proxy/gfw_proxy
 
 # Rust build artifacts
 gfw_proxy_rs/target/

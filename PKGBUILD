@@ -3,7 +3,7 @@
 # NOTE: Run pnpm build first
 
 pkgname=vegord-gfw-proxy
-pkgver=1.6.11
+pkgver=1.7.1
 pkgrel=1
 pkgdesc="Vegcord - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
 arch=('x86_64' 'aarch64')
@@ -11,9 +11,6 @@ url="https://github.com/vergoboy/Vegcord"
 license=('GPL3')
 depends=(
     'electron>=43'
-    'python'
-    'python-dnspython'
-    'python-requests'
     'libxss'
     'libxtst'
     'glibc'
@@ -93,6 +90,9 @@ SCRIPT
 exec /opt/vegord/vegord.sh "$@"
 SCRIPT
 
+    # The Rust proxy is the only backend: strip any leftover Python files from
+    # the staged static dir so the package never ships the removed fallback.
+    find "${pkgdir}/opt/vegord/static" -name '*.py' -delete 2>/dev/null || true
     find "${pkgdir}/opt/vegord/static" -name '__pycache__' -type d -prune -exec rm -rf {} \; 2>/dev/null || true
     find "${pkgdir}/opt/vegord/static" -name '*.pyc' -delete 2>/dev/null || true
     install -dm755 "${pkgdir}/opt/vegord/static/gfw_proxy/logs"

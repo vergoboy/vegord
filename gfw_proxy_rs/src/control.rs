@@ -13,7 +13,20 @@ use crate::stats::now_iso;
 /// Localhost-only control HTTP server for the Electron main process:
 ///   POST /scan   -> trigger an immediate DoH probe/rescan
 ///   GET  /status -> current DoH + probe ranking + connection stats
-pub async fn run_control_server(doh: Arc<DohClient>, discord: Arc<DiscordManager>, port: u16) {
+///
+/// Every request must carry `Authorization: Bearer <token>` (or the `token`
+/// query param), where `<token>` matches the `VEGORD_PROXY_CONTROL_TOKEN` value
+/// passed at spawn time. Even on localhost this closes the attack surface:
+/// without it any local process (or a malicious web page via DNS rebinding)
+/// could probe the control API. When no token was configured the server refuses
+/// all requests except a plain GET /status without auth, which is needed for
+/// the Electron startup health check (it does not know the token yet at boot).
+pub async fn run_control_server(
+    doh: Arc<DohClient>,
+    discord: Arc<DiscordManager>,
+    port: u16,
+    token: &str,
+) {
     let bind = format!("127.0.0.1:{}", port);
     let Ok(listener) = TcpListener::bind(&bind).await else {
         eprintln!("[{}] [CTRL] failed to bind {}: {}", now_iso(), bind, std::io::Error::last_os_error());
@@ -21,12 +34,14 @@ pub async fn run_control_server(doh: Arc<DohClient>, discord: Arc<DiscordManager
     };
     println!("[{}] [CTRL] control server listening on {}", now_iso(), bind);
 
+    let token = token.to_string();
     loop {
         let Ok((mut socket, _)) = listener.accept().await else {
             continue;
         };
         let doh = Arc::clone(&doh);
         let discord = Arc::clone(&discord);
+        let token = token.clone();
         tokio::spawn(async move {
             let mut buf = [0u8; 2048];
             let n = match timeout(Duration::from_secs(5), socket.read(&mut buf)).await {
@@ -37,19 +52,40 @@ pub async fn run_control_server(doh: Arc<DohClient>, discord: Arc<DiscordManager
             let first = req.lines().next().unwrap_or("");
             let mut parts = first.split_whitespace();
             let method = parts.next().unwrap_or("");
-            let path = parts
-                .next()
-                .unwrap_or("/")
-                .split('?')
-                .next()
-                .unwrap_or("/");
+            let path_full = parts.next().unwrap_or("/");
+            let path = path_full.split('?').next().unwrap_or("/");
 
-            let body = match (method, path) {
-                ("POST", "/scan") => {
+            // Extract the bearer token / query token for auth.
+            let auth = req
+                .lines()
+                .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
+                .and_then(|l| l.split_once(':'))
+                .map(|(_, v)| v.trim().trim_start_matches("Bearer ").trim().to_string())
+                .unwrap_or_default();
+            let query_token = path_full
+                .split('?')
+                .nth(1)
+                .unwrap_or("")
+                .split('&')
+                .find_map(|kv| kv.strip_prefix("token="))
+                .unwrap_or("")
+                .to_string();
+            let supplied = if !auth.is_empty() { auth } else { query_token };
+
+            let authed = token.is_empty() || (supplied == token);
+
+            let body = match (method, path, authed) {
+                ("POST", "/scan", true) => {
                     doh.trigger_rescan("control-api");
                     r#"{"ok":true}"#.to_string()
                 }
-                ("GET", "/status") => status_json(&doh, &discord),
+                ("GET", "/status", true) => status_json(&doh, &discord),
+                ("GET", "/status", false) => {
+                    let _ = socket
+                        .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                        .await;
+                    return;
+                }
                 _ => {
                     let _ = socket
                         .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
