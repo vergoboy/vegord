@@ -34,6 +34,22 @@ else
     exit 1
 fi
 
+# Ship the tun2proxy relay for the Discord split tunnel (opt-in via the
+# discordTunTunnel setting; requires CAP_NET_ADMIN granted by setcap at install).
+TUN2PROXY_BIN=""
+if [ -d "$srcdir/tun2proxy" ] && command -v cargo >/dev/null 2>&1; then
+    if (cd "$srcdir/tun2proxy" && cargo build --release --bin tun2proxy-bin) >/dev/null 2>&1; then
+        TUN2PROXY_BIN="$srcdir/tun2proxy/target/release/tun2proxy-bin"
+    fi
+fi
+if [ -n "$TUN2PROXY_BIN" ] && [ -x "$TUN2PROXY_BIN" ]; then
+    cp "$TUN2PROXY_BIN" "$srcdir/static/gfw_proxy/tun2proxy-bin"
+    chmod +x "$srcdir/static/gfw_proxy/tun2proxy-bin"
+    echo "Packaged tun2proxy relay: $TUN2PROXY_BIN"
+else
+    echo "WARN: tun2proxy-bin not built; the Discord split tunnel will be unavailable."
+fi
+
 # Copy built files
 cp -r "$srcdir/dist/js" "$pkgdir/opt/vegord/dist/"
 cp -r "$srcdir/static" "$pkgdir/opt/vegord/"
@@ -48,7 +64,7 @@ cp "$srcdir/build/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/vegord
 # Desktop entry
 cat > "$pkgdir/usr/share/applications/vegord-gfw.desktop" <<EOF
 [Desktop Entry]
-Name=Vegcord GFW
+Name=vegord GFW
 Comment=Custom Discord desktop app with GFW-resistant proxy
 Exec=/opt/vegord/vegord.sh %U
 Icon=vegord
@@ -57,7 +73,7 @@ Type=Application
 Categories=Network;InstantMessaging;Chat;
 MimeType=x-scheme-handler/discord;
 StartupWMClass=vegord
-Keywords=discord;vencord;electron;chat;
+Keywords=discord;vegord;electron;chat;
 EOF
 
 # Startup script
@@ -75,7 +91,7 @@ if [ -n "$LD_PRELOAD" ]; then
     fi
 fi
 # --class=vegord matches StartupWMClass in the .desktop file so the
-# taskbar/titlebar show the Vegcord icon instead of the default Electron one
+# taskbar/titlebar show the vegord icon instead of the default Electron one
 exec /usr/bin/electron --class=vegord /opt/vegord/dist/js/main.js "$@"
 SCRIPT
 
@@ -102,10 +118,10 @@ pkg_size=$(du -sb --apparent-size "$pkgdir" | cut -f1)
 cat > "$pkgdir/.PKGINFO" <<EOF
 pkgname = ${pkgname}
 pkgver = ${pkgver}-${pkgrel}
-pkgdesc = Vegcord - Custom Discord desktop app with built-in high-performance Rust GFW-resistant proxy (SOCKS5/HTTP + TLS Fragment + Multi-DoH + Voice UDP)
-url = https://github.com/vergoboy/Vegcord
+pkgdesc = vegord - Custom Discord desktop app with built-in high-performance Rust GFW-resistant proxy (SOCKS5/HTTP + TLS Fragment + Multi-DoH + Voice UDP)
+url = https://github.com/vergoboy/vegord
 builddate = $(date +%s)
-packager = Vegcord Builder
+packager = vegord Builder
 size = ${pkg_size}
 arch = x86_64
 license = GPL3
@@ -120,13 +136,25 @@ EOF
 # .INSTALL
 cat > "$pkgdir/.INSTALL" <<'EOF'
 post_install() {
-    echo "Vegcord GFW proxy installed successfully."
+    echo "vegord GFW proxy installed successfully."
     echo "Run 'vegord' or 'vegord-gfw' to start."
     echo "Pass --no-proxy to disable the built-in SOCKS5 proxy."
+    # Grant the split-tunnel capability so the Discord TUN tunnel needs no
+    # password prompts. Best-effort: skip silently when setcap is unavailable.
+    if command -v setcap >/dev/null 2>&1; then
+        setcap cap_net_admin,cap_net_raw+ep /opt/vegord/static/gfw_proxy/gfw_proxy 2>/dev/null \
+            && echo "setcap: gfw_proxy granted cap_net_admin,cap_net_raw" \
+            || echo "setcap: could not grant gfw_proxy capabilities"
+        setcap cap_net_admin,cap_net_raw+ep /opt/vegord/static/gfw_proxy/tun2proxy-bin 2>/dev/null \
+            && echo "setcap: tun2proxy-bin granted cap_net_admin,cap_net_raw" \
+            || echo "setcap: could not grant tun2proxy-bin capabilities"
+    else
+        echo "setcap not found: Discord split tunnel (discordTunTunnel) will be unavailable."
+    fi
 }
 post_upgrade() { post_install; }
 post_remove() {
-    echo "Vegcord GFW proxy has been removed."
+    echo "vegord GFW proxy has been removed."
 }
 EOF
 

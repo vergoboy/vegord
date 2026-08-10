@@ -3,7 +3,6 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use parking_lot::RwLock;
-use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 use crate::config::{Config, DISCORD_DOMAINS};
@@ -169,7 +168,14 @@ impl DiscordManager {
             let addr = SocketAddr::new(ip, 443);
             let t0 = Instant::now();
 
-            let res = timeout(ping_timeout, TcpStream::connect(addr)).await;
+            // Marked so the ping bypasses the split-tunnel TUN routes (loop
+            // avoidance) when the tunnel is active.
+            let fwmark = if config.tun_split_enabled {
+                Some(config.tun_fwmark)
+            } else {
+                None
+            };
+            let res = timeout(ping_timeout, crate::tun::connect_tcp(addr, fwmark)).await;
             let rtt_opt = match res {
                 Ok(Ok(stream)) => {
                     let rtt = t0.elapsed().as_secs_f64() * 1000.0;

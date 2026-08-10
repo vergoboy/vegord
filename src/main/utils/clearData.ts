@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -10,8 +10,8 @@ import { DATA_DIR, MessageBoxChoice } from "main/constants";
 
 export async function clearData(win: BrowserWindow) {
     const { response } = await dialog.showMessageBox(win, {
-        message: "Are you sure you want to reset Vegcord?",
-        detail: "This will log you out, clear caches and reset all your settings!\n\nVegcord will automatically restart after this operation.",
+        message: "Are you sure you want to reset vegord?",
+        detail: "This will log you out, clear caches and reset all your settings!\n\nvegord will automatically restart after this operation.",
         buttons: ["Yes", "No"],
         cancelId: MessageBoxChoice.Cancel,
         defaultId: MessageBoxChoice.Default,

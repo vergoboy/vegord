@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -44,6 +44,9 @@ export interface Settings {
     /** Upstream SOCKS5 relay ("user:pass@host:port") for Discord traffic, to bypass the GFW's Cloudflare-Spectrum relay that rejects Discord with Cloudflare error 1034. */
     relaySocks5?: string;
 
+    /** Discord-only split tunnel via tun2proxy (default off). Requires CAP_NET_ADMIN on the gfw_proxy and tun2proxy binaries (applied by setcap at package install). When on, the proxy spawns tun2proxy, routes only Discord IPs into the TUN, and lets WebRTC UDP flow direct into the tunnel instead of via SOCKS. */
+    discordTunTunnel?: boolean;
+
     audio?: {
         workaround?: boolean;
 
@@ -70,7 +73,7 @@ export interface State {
     steamOSLayoutVersion?: number;
     linuxAutoStartEnabled?: boolean;
 
-    vencordDir?: string;
+    vegordDir?: string;
 
     updater?: {
         ignoredVersion?: string;

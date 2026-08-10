@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -29,9 +29,7 @@ export default defineConfig(
             "src/pnpm-workspace.yaml",
             "src/chatlog.log",
             // gitignored leftover source copies kept on disk
-            "src/Vesktop-1.6.5",
             "src/src",
-            "src/vesktop-gfw-proxy",
             "src/scripts",
             "src/packages",
             "src/patches",
@@ -88,7 +86,7 @@ export default defineConfig(
                 "error",
                 {
                     files: ["scripts/header.txt"],
-                    templates: { author: [".*", "Vendicated and Vegcord contributors"] }
+                    templates: { author: [".*", "Vendicated and vegord contributors"] }
                 }
             ],
 

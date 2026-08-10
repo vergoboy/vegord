@@ -1,11 +1,12 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { app } from "electron";
-import { basename } from "path";
+import { readFileSync } from "fs";
+import { basename, join } from "path";
 import { stripIndent } from "shared/utils/text";
 import { parseArgs, ParseArgsOptionDescriptor } from "util";
 
@@ -45,7 +46,7 @@ const options = {
     },
     repair: {
         type: "boolean",
-        description: "Repair the application by re-downloading the latest Vencord files"
+        description: "Repair the application by re-downloading the latest vegord files"
     }
 } satisfies Record<string, Option>;
 
@@ -64,10 +65,34 @@ const extraOptions = {
     "ozone-platform": {
         hidden: process.platform !== "linux",
         type: "string",
-        description: "Whether to run Vegcord in Wayland or X11 (XWayland)",
+        description: "Whether to run vegord in Wayland or X11 (XWayland)",
         options: ["x11", "wayland"]
     }
 } satisfies Record<string, Option>;
+
+// The packaged app runs as `electron dist/js/main.js`, so Electron would treat
+// it as the default "Electron" app and use ~/.config/Electron for userData.
+// Pin the app name and data directory to "vegord" so settings, session and
+// logs consistently land in ~/.config/vegord no matter how the app is started.
+// Must run before constants.ts resolves DATA_DIR. cli.ts is imported first by
+// main.ts/index.ts and by constants.ts itself, so this is always evaluated in
+// time. An explicit --user-data-dir is left untouched.
+app.setName("vegord");
+if (!app.commandLine.hasSwitch("user-data-dir")) {
+    try {
+        app.setPath("userData", join(app.getPath("appData"), "vegord"));
+    } catch {}
+}
+// Renaming the app above makes Electron's default-app fallback report version
+// "0.0" instead of the Electron version, which is not valid semver and makes
+// electron-updater throw at startup. Pin the real version from our package.json.
+try {
+    const { version } = JSON.parse(readFileSync(join(__dirname, "..", "..", "package.json"), "utf8"));
+    if (typeof version === "string") {
+        // app.setVersion exists at runtime but is missing from Electron's typings
+        (app as unknown as { setVersion(v: string): void }).setVersion(version);
+    }
+} catch {}
 
 const args = basename(process.argv[0]).toLowerCase().startsWith("electron")
     ? process.argv.slice(2)
@@ -84,13 +109,13 @@ export function checkCommandLineForHelpOrVersion() {
     const { help, version } = CommandLine.values;
 
     if (version) {
-        console.log(`Vegcord v${app.getVersion()}`);
+        console.log(`vegord v${app.getVersion()}`);
         app.exit(0);
     }
 
     if (help) {
         const base = stripIndent`
-            Vegcord v${app.getVersion()}
+            vegord v${app.getVersion()}
 
             Usage: ${basename(process.execPath)} [options] [url]
 
@@ -100,7 +125,7 @@ export function checkCommandLineForHelpOrVersion() {
             Chromium Options:
               See <https://peter.sh/experiments/chromium-command-line-switches> - only some of them work
 
-            Vegcord Options:
+            vegord Options:
         `;
 
         const optionLines = Object.entries(options)

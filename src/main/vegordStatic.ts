@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -12,7 +12,7 @@ import { isPathInDirectory } from "./utils/isPathInDirectory";
 
 const STATIC_DIR = join(__dirname, "..", "..", "static");
 
-export async function handleVegcordStaticProtocol(path: string, req: Request) {
+export async function handlevegordStaticProtocol(path: string, req: Request) {
     const fullPath = join(STATIC_DIR, path);
     if (!isPathInDirectory(fullPath, STATIC_DIR)) {
         return new Response(null, { status: 404 });

@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -34,12 +34,12 @@ addPatch({
         }
 
         const cb = (w: string, c: string[]) => {
-            VegcordNative.spellcheck.offSpellcheckResult(cb);
+            vegordNative.spellcheck.offSpellcheckResult(cb);
             word = w;
             corrections = c;
             openMenu();
         };
-        VegcordNative.spellcheck.onSpellcheckResult(cb);
+        vegordNative.spellcheck.onSpellcheckResult(cb);
     }
 });
 
@@ -47,7 +47,7 @@ addContextMenuPatch("textarea-context", children => {
     const spellCheckEnabled = useStateFromStores([SpellCheckStore], () => SpellCheckStore.isEnabled());
     const hasCorrections = Boolean(word && corrections?.length);
 
-    const availableLanguages = useMemo(VegcordNative.spellcheck.getAvailableLanguages, []);
+    const availableLanguages = useMemo(vegordNative.spellcheck.getAvailableLanguages, []);
 
     const settings = useSettings();
     const spellCheckLanguages = (settings.spellCheckLanguages ??= [...new Set(navigator.languages)]);
@@ -65,14 +65,14 @@ addContextMenuPatch("textarea-context", children => {
                             key={c}
                             id={"vcd-spellcheck-suggestion-" + c}
                             label={c}
-                            action={() => VegcordNative.spellcheck.replaceMisspelling(c)}
+                            action={() => vegordNative.spellcheck.replaceMisspelling(c)}
                         />
                     ))}
                     <Menu.MenuSeparator />
                     <Menu.MenuItem
                         id="vcd-spellcheck-learn"
                         label={`Add ${word} to dictionary`}
-                        action={() => VegcordNative.spellcheck.addToDictionary(word)}
+                        action={() => vegordNative.spellcheck.addToDictionary(word)}
                     />
                 </>
             )}

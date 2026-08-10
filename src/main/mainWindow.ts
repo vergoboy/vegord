@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -27,19 +27,20 @@ import { initArRPC } from "./arrpc";
 import { CommandLine } from "./cli";
 import { logError, logInfo, logWarn } from "./connectionLog";
 import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, ICON_PATH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+import { toggleDebugWindow } from "./debugWindow";
 import { logProxyStatus, requestProxyRescan } from "./dohControl";
 import { AppEvents } from "./events";
 import { sendRendererCommand } from "./ipcCommands";
 import { themeDiscordLoadingScreen } from "./loadingScreen";
 import { darwinURL } from "./main";
-import { Settings, State, VencordSettings } from "./settings";
+import { Settings, State, vegordSettings } from "./settings";
 import { createSplashWindow, updateSplashMessage } from "./splash";
 import { destroyTray, initTray } from "./tray";
 import { clearData } from "./utils/clearData";
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
 import { applyDeckKeyboardFix, askToApplySteamLayout, isDeckGameMode } from "./utils/steamOS";
-import { ensureVencordFiles } from "./utils/vencordLoader";
-import { VENCORD_FILES_DIR } from "./vencordFilesDir";
+import { ensureVegordFiles } from "./utils/vegordLoader";
+import { VEGORD_FILES_DIR } from "./vegordFilesDir";
 
 let isQuitting = false;
 
@@ -70,35 +71,35 @@ function makeSettingsListenerHelpers<O extends object>(o: SettingsStore<O>) {
 }
 
 const [addSettingsListener, removeSettingsListeners] = makeSettingsListenerHelpers(Settings);
-const [addVencordSettingsListener, removeVencordSettingsListeners] = makeSettingsListenerHelpers(VencordSettings);
+const [addvegordSettingsListener, removevegordSettingsListeners] = makeSettingsListenerHelpers(vegordSettings);
 
 type MenuItemList = Array<MenuItemConstructorOptions | false>;
 
 function initMenuBar(win: BrowserWindow) {
     const isWindows = process.platform === "win32";
     const isDarwin = process.platform === "darwin";
-    const wantCtrlQ = !isWindows || VencordSettings.store.winCtrlQ;
+    const wantCtrlQ = !isWindows || vegordSettings.store.winCtrlQ;
 
     const subMenu = [
         {
-            label: "About Vegcord",
+            label: "About vegord",
             click: createAboutWindow
         },
         {
-            label: "Force Update Vencord",
+            label: "Force Update vegord",
             async click() {
-                await ensureVencordFiles(true);
+                await ensureVegordFiles(true);
                 app.relaunch();
                 app.quit();
             },
-            toolTip: "Vegcord will automatically restart after this operation"
+            toolTip: "vegord will automatically restart after this operation"
         },
         {
-            label: "Reset Vegcord",
+            label: "Reset vegord",
             async click() {
                 await clearData(win);
             },
-            toolTip: "Vegcord will automatically restart after this operation"
+            toolTip: "vegord will automatically restart after this operation"
         },
         {
             label: "Relaunch",
@@ -107,6 +108,11 @@ function initMenuBar(win: BrowserWindow) {
                 app.relaunch();
                 app.quit();
             }
+        },
+        {
+            label: "Debug Panel",
+            accelerator: "CmdOrCtrl+Shift+D",
+            click: toggleDebugWindow
         },
         ...(!isDarwin
             ? []
@@ -165,7 +171,7 @@ function initMenuBar(win: BrowserWindow) {
 
     const menuItems = [
         {
-            label: "Vegcord",
+            label: "vegord",
             role: "appMenu",
             submenu: subMenu.filter(isTruthy)
         },
@@ -222,7 +228,7 @@ function initSettingsListeners(win: BrowserWindow) {
         }
     });
 
-    addVencordSettingsListener("macosTranslucency", enabled => {
+    addvegordSettingsListener("macosTranslucency", enabled => {
         if (enabled) {
             win.setVibrancy("sidebar");
             win.setBackgroundColor("#ffffff00");
@@ -274,7 +280,7 @@ function initStaticTitle(win: BrowserWindow) {
 
     addSettingsListener("staticTitle", enabled => {
         if (enabled) {
-            win.setTitle("Vegcord");
+            win.setTitle("vegord");
             win.on("page-title-updated", listener);
         } else {
             win.off("page-title-updated", listener);
@@ -319,7 +325,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
     const { staticTitle, transparencyOption, enableMenu, customTitleBar, splashTheming, splashBackground } =
         Settings.store;
 
-    const { frameless, transparent, macosVibrancyStyle } = VencordSettings.store;
+    const { frameless, transparent, macosVibrancyStyle } = vegordSettings.store;
 
     const noFrame = frameless === true || customTitleBar === true;
     const backgroundColor =
@@ -359,7 +365,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
     }
 
     if (staticTitle) {
-        options.title = "Vegcord";
+        options.title = "vegord";
     }
 
     if (process.platform === "darwin") {
@@ -378,7 +384,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
 function createMainWindow() {
     // Clear up previous settings listeners
     removeSettingsListeners();
-    removeVencordSettingsListeners();
+    removevegordSettingsListeners();
 
     const win = (mainWin = new BrowserWindow(buildBrowserWindowOptions()));
 
@@ -422,7 +428,7 @@ function createMainWindow() {
     return win;
 }
 
-const runVencordMain = once(() => require(join(VENCORD_FILES_DIR, "vencordDesktopMain.js")));
+const runvegordMain = once(() => require(join(VEGORD_FILES_DIR, "vegordDesktopMain.js")));
 
 export function loadUrl(uri: string | undefined) {
     const branch = Settings.store.discordBranch;
@@ -461,8 +467,8 @@ export async function createWindows() {
         if (isDeckGameMode) splash.setFullScreen(true);
     }
 
-    await ensureVencordFiles();
-    runVencordMain();
+    await ensureVegordFiles();
+    runvegordMain();
 
     mainWin = createMainWindow();
 

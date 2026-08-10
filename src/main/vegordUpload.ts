@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -15,7 +15,7 @@ import { logError, logInfo, logWarn } from "./connectionLog";
 import { mainWin } from "./mainWindow";
 import { handle } from "./utils/ipcWrappers";
 
-// Vegcord file sharing: uploads land in /opt/vegord/files on the server and are
+// vegord file sharing: uploads land in /opt/vegord/files on the server and are
 // served back at <base>/vegord/files/<name>.
 const UPLOAD_URL = "https://vergoboy.ir/vegord/api/v1/upload";
 const UPLOAD_TOKEN = "56b7674d6d8ae1635bf60741a9ebd3a44896549ddcf3b870";

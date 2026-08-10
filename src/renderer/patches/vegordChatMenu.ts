@@ -1,13 +1,13 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 /*
- * Vegcord: "More" chat bar button + "Upload Vegord" + emoji-picker tab icons.
+ * vegord: "More" chat bar button + "Upload Vegord" + emoji-picker tab icons.
  *
- * Pure DOM implementation. It deliberately avoids Vencord's ChatButtons API: the
+ * Pure DOM implementation. It deliberately avoids vegord's ChatButtons API: the
  * _injectButtons patch no longer matches modern Discord's chat bar, so buttons
  * registered via addChatBarButton are silently never rendered. Instead the ⋮
  * button is injected inside the chat bar's attach wrapper (where the hidden
@@ -102,7 +102,7 @@ function dropFileIntoComposer(file: File): boolean {
 
 /* ---------------------------- upload panel ---------------------------- */
 
-VegcordNative.upload.onProgress(p => {
+vegordNative.upload.onProgress(p => {
     if (upload?.status === "uploading") {
         upload = { ...upload, sent: p.sent, total: p.total || upload.total };
         renderUploadPanel();
@@ -171,7 +171,7 @@ async function startUpload() {
     closeMenu();
     setUpload({ status: "uploading", name: "Preparing\u2026", sent: 0, total: 0 });
     try {
-        const result = await VegcordNative.upload.pick();
+        const result = await vegordNative.upload.pick();
         if (!result || "canceled" in result) {
             setUpload(null);
             return;

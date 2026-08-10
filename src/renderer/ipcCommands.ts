@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -14,10 +14,10 @@ type IpcCommandHandler = (data: any) => any;
 const handlers = new Map<string, IpcCommandHandler>();
 
 function respond(nonce: string, ok: boolean, data: any) {
-    VegcordNative.commands.respond({ nonce, ok, data });
+    vegordNative.commands.respond({ nonce, ok, data });
 }
 
-VegcordNative.commands.onCommand(async ({ message, nonce, data }) => {
+vegordNative.commands.onCommand(async ({ message, nonce, data }) => {
     const handler = handlers.get(message);
     if (!handler) {
         return respond(nonce, false, `No handler for message: ${message}`);

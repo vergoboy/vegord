@@ -1,0 +1,136 @@
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+
+name: Publish Releases
+
+jobs:
+  build_publish:
+    name: Publishing Tasks
+
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+          - armv7-unknown-linux-musleabi
+          - armv7-unknown-linux-musleabihf
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+          - x86_64-win7-windows-msvc
+          - i686-win7-windows-msvc
+
+        include:
+          - target: x86_64-unknown-linux-gnu
+            host_os: ubuntu-22.04
+          - target: x86_64-unknown-linux-musl
+            host_os: ubuntu-latest
+          - target: i686-unknown-linux-musl
+            host_os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            host_os: ubuntu-latest
+          - target: armv7-unknown-linux-musleabi
+            host_os: ubuntu-latest
+          - target: armv7-unknown-linux-musleabihf
+            host_os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            host_os: macos-latest
+          - target: aarch64-apple-darwin
+            host_os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            host_os: windows-latest
+          - target: i686-pc-windows-msvc
+            host_os: windows-latest
+          - target: aarch64-pc-windows-msvc
+            host_os: windows-latest
+          - target: x86_64-win7-windows-msvc
+            host_os: windows-latest
+          - target: i686-win7-windows-msvc
+            host_os: windows-latest
+
+    runs-on: ${{ matrix.host_os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Prepare
+        shell: bash
+        run: |
+          mkdir mypubdir4
+          if [[ "${{ matrix.target }}" != "x86_64-win7-windows-msvc" && "${{ matrix.target }}" != "i686-win7-windows-msvc" ]]; then
+            rustup target add ${{ matrix.target }}
+          fi
+          cargo install cbindgen
+          if [[ "${{ contains(matrix.host_os, 'ubuntu') }}" == "true" && "${{ matrix.host_os }}" != "ubuntu-22.04" ]]; then
+            cargo install cross --git https://github.com/cross-rs/cross.git --rev 1d07d3f
+          fi
+
+      - name: Build
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          if [[ "${{ contains(matrix.host_os, 'ubuntu') }}" == "true" && "${{ matrix.host_os }}" != "ubuntu-22.04" ]]; then
+            cross build --all-features --release --target ${{ matrix.target }}
+          else
+            if [[ "${{ matrix.target }}" == "x86_64-win7-windows-msvc" || "${{ matrix.target }}" == "i686-win7-windows-msvc" ]]; then
+              rustup toolchain install nightly
+              rustup component add rust-src --toolchain nightly
+              cargo +nightly build --release -Z build-std --target ${{ matrix.target }}
+            else
+              cargo build --all-features --release --target ${{ matrix.target }}
+            fi
+          fi
+          cbindgen --config cbindgen.toml -o target/tun2proxy.h
+          if [[ "${{ matrix.host_os }}" == "windows-latest" ]]; then
+            powershell -Command "(Get-Item README.md).LastWriteTime = Get-Date"
+            powershell -Command "(Get-Item target/${{ matrix.target }}/release/wintun.dll).LastWriteTime = Get-Date"
+            powershell Compress-Archive -Path target/${{ matrix.target }}/release/tun2proxy-bin.exe, target/${{ matrix.target }}/release/udpgw-server.exe, README.md, target/tun2proxy.h, target/${{ matrix.target }}/release/tun2proxy.dll, target/${{ matrix.target }}/release/wintun.dll -DestinationPath mypubdir4/tun2proxy-${{ matrix.target }}.zip
+          elif [[ "${{ matrix.host_os }}" == "macos-latest" ]]; then
+            zip -j mypubdir4/tun2proxy-${{ matrix.target }}.zip target/${{ matrix.target }}/release/tun2proxy-bin target/${{ matrix.target }}/release/udpgw-server README.md target/tun2proxy.h target/${{ matrix.target }}/release/libtun2proxy.dylib
+            if [[ "${{ matrix.target }}" == "x86_64-apple-darwin" ]]; then
+              ./build-aarch64-apple-ios.sh
+              zip -r mypubdir4/tun2proxy-aarch64-apple-ios-xcframework.zip ./tun2proxy.xcframework/
+              ./build-apple.sh
+              zip -r mypubdir4/tun2proxy-apple-xcframework.zip ./tun2proxy.xcframework/
+            fi
+          elif [[ "${{ contains(matrix.host_os, 'ubuntu') }}" == "true" ]]; then
+            zip -j mypubdir4/tun2proxy-${{ matrix.target }}.zip target/${{ matrix.target }}/release/tun2proxy-bin target/${{ matrix.target }}/release/udpgw-server README.md target/tun2proxy.h target/${{ matrix.target }}/release/libtun2proxy.so
+            if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu" ]]; then
+              ./build-android.sh
+              cp ./tun2proxy-android-libs.zip ./mypubdir4/
+            fi
+          fi
+
+      - name: Upload artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.target }}
+          path: mypubdir4/*
+
+      - name: Generate artifact attestation
+        if: ${{ !cancelled() }}
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: mypubdir4/*
+
+      - name: Publish
+        if: ${{ !cancelled() }}
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: mypubdir4/*

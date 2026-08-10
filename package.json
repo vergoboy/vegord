@@ -2,7 +2,7 @@
     "name": "vegord",
     "version": "1.7.3",
     "private": true,
-    "description": "Vegcord is a custom Discord desktop app",
+    "description": "vegord is a custom Discord desktop app",
     "keywords": [],
     "homepage": "https://vergoboy.ir/vegord",
     "repository": {
@@ -15,7 +15,7 @@
     "scripts": {
         "build": "tsx scripts/build/build.mts",
         "build:dev": "pnpm build --dev",
-        "buildLibVegcord": "pnpm -C packages/libvegord install && pnpm -C packages/libvegord run build",
+        "buildLibvegord": "pnpm -C packages/libvegord install && pnpm -C packages/libvegord run build",
         "package": "pnpm build && electron-builder",
         "package:dir": "pnpm build && electron-builder --dir",
         "lint": "eslint --config eslint.config.mjs",
@@ -71,7 +71,7 @@
     },
     "build": {
         "appId": "dev.vergoboy.vegord",
-        "productName": "Vegcord",
+        "productName": "vegord",
         "executableName": "vegord",
         "files": [
             "!*",
@@ -128,11 +128,11 @@
             ],
             "desktop": {
                 "entry": {
-                    "Name": "Vegcord",
+                    "Name": "vegord",
                     "GenericName": "Internet Messenger",
                     "Type": "Application",
                     "Categories": "Network;InstantMessaging;Chat;",
-                    "Keywords": "discord;vencord;electron;chat;",
+                    "Keywords": "discord;vegord;electron;chat;",
                     "MimeType": "x-scheme-handler/discord",
                     "StartupWMClass": "vegord"
                 }

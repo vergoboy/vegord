@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -21,7 +21,7 @@ addPatch({
 
     flashFrame() {
         if (Settings.store.enableTaskbarFlashing) {
-            VegcordNative.win.flashFrame(true);
+            vegordNative.win.flashFrame(true);
         }
     }
 });

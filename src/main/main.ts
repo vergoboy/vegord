@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -18,7 +18,8 @@ import { join } from "path";
 import { startAnnouncements } from "./announcements";
 import { flushBeforeQuit, logInfo, startConnectionLog } from "./connectionLog";
 import { DATA_DIR } from "./constants";
-import { logProxyStatus } from "./dohControl";
+import { logProxyStatus, startQualitySnapshot } from "./dohControl";
+import { closeFileLog, fileLog, initFileLog } from "./fileLog";
 import { createFirstLaunchTour } from "./firstLaunch";
 import {
     ensureProxyRunning,
@@ -40,11 +41,12 @@ import { startGithubUpdateChecker, startTelemetry } from "./telemetry";
 import { setAsDefaultProtocolClient } from "./utils/setAsDefaultProtocolClient";
 import { isDeckGameMode } from "./utils/steamOS";
 
-console.log("Vegcord v" + app.getVersion());
+console.log("vegord v" + app.getVersion());
+initFileLog();
 logInfo("app_start");
 
-// Make the Vencord files use our DATA_DIR
-process.env.VENCORD_USER_DATA_DIR = DATA_DIR;
+// Make the vegord files use our DATA_DIR
+process.env.VEGORD_USER_DATA_DIR = DATA_DIR;
 
 const isLinux = process.platform === "linux";
 const isWindows = process.platform === "win32";
@@ -109,9 +111,17 @@ function init() {
             console.log(`[Proxy] Using proxy: ${getProxyAddress()}`);
         }
 
-        // Force all WebRTC traffic through proxy (critical for voice to work over SOCKS5)
-        app.commandLine.appendSwitch("webrtc-ip-handling-policy", "disable_non_proxied_udp");
-        console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
+        // Force all WebRTC traffic through proxy (critical for voice to work over SOCKS5).
+        // With the Discord split tunnel enabled this is intentionally skipped: the TUN
+        // routes Discord IPs at the kernel level, so WebRTC UDP is allowed to go direct
+        // and is captured by the tunnel (relayed back through the proxy by tun2proxy).
+        const tunTunnel = Settings.store.discordTunTunnel === true;
+        if (tunTunnel) {
+            console.log("[Voice] Split tunnel enabled: WebRTC UDP goes direct into the TUN");
+        } else {
+            app.commandLine.appendSwitch("webrtc-ip-handling-policy", "disable_non_proxied_udp");
+            console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
+        }
 
         // Support TTS on Linux using https://wiki.archlinux.org/title/Speech_dispatcher
         // Only enable when the speechd daemon is actually installed: without it,
@@ -129,7 +139,9 @@ function init() {
         }
 
         // Log voice-relevant Chrome flags for debugging
-        console.log("[Voice] Proxy SOCKS5=127.0.0.1:4500, WebRTC=disable_non_proxied_udp");
+        console.log(
+            `[Voice] Proxy SOCKS5=127.0.0.1:4500, WebRTC=${tunTunnel ? "direct (TUN split)" : "disable_non_proxied_udp"}`
+        );
     }
 
     disabledFeatures.forEach(feat => enabledFeatures.delete(feat));
@@ -170,14 +182,14 @@ function init() {
     });
 
     app.whenReady().then(async () => {
-        if (process.platform === "win32") app.setAppUserModelId("dev.vencord.vegord");
+        if (process.platform === "win32") app.setAppUserModelId("dev.vegord.vegord");
         if (process.platform === "linux") {
             try {
                 app.setAppUserModelId("vegord");
             } catch {}
 
             // Match the .desktop file's StartupWMClass so the taskbar/titlebar
-            // shows the Vegcord icon instead of Electron's default one
+            // shows the vegord icon instead of Electron's default one
             try {
                 app.setDesktopName("vegord-gfw.desktop");
             } catch {}
@@ -196,12 +208,12 @@ function init() {
 
 if (!app.requestSingleInstanceLock({ IS_DEV })) {
     if (IS_DEV) {
-        console.log("Vegcord is already running. Quitting previous instance...");
+        console.log("vegord is already running. Quitting previous instance...");
         init();
     } else {
         console.log(
-            "Vegcord is already running (another instance holds the app lock). Quitting...\n" +
-                "If no Vegcord window appears, an instance is likely still running in the system tray.\n" +
+            "vegord is already running (another instance holds the app lock). Quitting...\n" +
+                "If no vegord window appears, an instance is likely still running in the system tray.\n" +
                 "Close it via the tray icon, or run: taskkill /F /IM vegord.exe"
         );
         app.quit();
@@ -219,10 +231,14 @@ startGithubUpdateChecker();
 // server each network/ISP ends up on over time.
 setInterval(() => logProxyStatus("periodic"), 15 * 60 * 1000);
 
+// Frequent internet-quality snapshots (RTT, packet loss, traffic, filtered
+// connections) into the local debug log.
+startQualitySnapshot();
+
 // Persistent panel announcements (visible until the user dismisses them)
 startAnnouncements();
 
-// First-party settings sync (replaces Vencord Cloud): silently saves this
+// First-party settings sync (replaces vegord Cloud): silently saves this
 // user's settings to the panel, restores them on the first login of the day.
 startSettingsSync();
 
@@ -232,16 +248,16 @@ async function bootstrap() {
     // cannot be started (e.g. a leftover process holding the ports).
     if (!hasCustomProxyOverride() && !(await ensureProxyRunning())) {
         const diagnostics = getLastProxyDiagnostics();
-        console.error("Vegcord could not start its network proxy. Quitting because the app requires it.");
+        console.error("vegord could not start its network proxy. Quitting because the app requires it.");
         if (diagnostics) console.error("Proxy diagnostics:", diagnostics);
         // The proxy folder path is platform-specific; on Windows the Linux
         // path (~/.config/...) is wrong and only confuses the user.
         const proxyDataDir = join(app.getPath("userData"), "proxy");
         dialog.showErrorBox(
-            "Vegcord requires the GFW proxy",
-            "Vegcord could not start its network proxy, so the app cannot run.\n\n" +
+            "vegord requires the GFW proxy",
+            "vegord could not start its network proxy, so the app cannot run.\n\n" +
                 (diagnostics ? `Details: ${diagnostics}\n\n` : "") +
-                "Please make sure no leftover Vegcord process is running and try again.\n\n" +
+                "Please make sure no leftover vegord process is running and try again.\n\n" +
                 `If the error persists, delete the proxy folder "${proxyDataDir}" and restart.`
         );
         app.exit(1);
@@ -277,6 +293,7 @@ app.on("before-quit", () => {
     flushBeforeQuit();
     markShuttingDown();
     stopProxy();
+    closeFileLog();
 });
 
 // Sets the WebRTC IP handling policy for all current and future windows.
@@ -284,6 +301,31 @@ app.on("before-quit", () => {
 // https://github.com/Vencord/Vegcord/issues/876
 app.on("web-contents-created", (_event, contents) => {
     contents.setWebRTCIPHandlingPolicy(Settings.store.webRTCIPHandlingPolicy ?? "default");
+
+    // Mirror every renderer console line into the local debug log. Discord's
+    // own logs (GatewaySocket, Connection, RTC/Voice, ...) are otherwise
+    // invisible to us, so this is the "discord log".
+    contents.on("console-message" as any, (...args: any[]) => {
+        // New API: event object with .message/.level/.lineNumber/.sourceId
+        // Old API: (level, message, line, sourceId) positional args
+        const [eventOrLevel, maybeMessage, maybeLine, maybeSource] = args;
+        let level: unknown;
+        let message: unknown;
+        let line: unknown;
+        let source: unknown;
+        if (typeof maybeMessage === "string" || typeof eventOrLevel?.message === "string") {
+            level = eventOrLevel?.level ?? "info";
+            message = eventOrLevel?.message ?? "";
+            line = eventOrLevel?.lineNumber ?? "";
+            source = eventOrLevel?.sourceId ?? "";
+        } else {
+            level = eventOrLevel;
+            message = maybeMessage;
+            line = maybeLine;
+            source = maybeSource;
+        }
+        fileLog("RENDERER", String(level), `${message} (${source}:${line})`);
+    });
 });
 Settings.addChangeListener("webRTCIPHandlingPolicy", () => {
     for (const win of BrowserWindow.getAllWindows()) {

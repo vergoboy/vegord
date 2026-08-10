@@ -1,7 +1,7 @@
 /*
- * Vegcord: Twemoji font + chat bar tweaks.
+ * vegord: Twemoji font + chat bar tweaks.
  * Generated - the @font-face embeds Twemoji Mozilla (COLR) as a data: URL so it
- * works regardless of the system emoji font. Discord's CSP is patched by Vencord
+ * works regardless of the system emoji font. Discord's CSP is patched by vegord
  * to allow data: in font-src, so this loads reliably. The raw font ships with the
  * app too (static/fonts/TwemojiMozilla.ttf), in case the data URL ever needs
  * regenerating or the file is used elsewhere.

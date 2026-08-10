@@ -1,15 +1,15 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         const messageElement = document.querySelector('.message');
-        VegcordSplashNative.onUpdateMessage(message => {
+        vegordSplashNative.onUpdateMessage(message => {
             messageElement.textContent = message;
         });
 
         document.querySelector('#donate-btn').addEventListener('click', () => {
-            VegcordSplashNative.openExternal('https://vergoboy.ir/donate');
+            vegordSplashNative.openExternal('https://vergoboy.ir/donate');
         });
 
         document.querySelector('#github-btn').addEventListener('click', () => {
-            VegcordSplashNative.openExternal('https://github.com/vergoboy/vegord');
+            vegordSplashNative.openExternal('https://github.com/vergoboy/vegord');
         });
     });

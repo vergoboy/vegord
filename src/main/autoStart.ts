@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -37,8 +37,8 @@ function makeAutoStartLinuxDesktop(): AutoStart {
             const desktopFile = stripIndent`
                 [Desktop Entry]
                 Type=Application
-                Name=Vegcord
-                Comment=Vegcord autostart script
+                Name=vegord
+                Comment=vegord autostart script
                 Exec=${getEscapedCommandLine().join(" ")}
                 StartupNotify=false
                 Terminal=false
@@ -86,8 +86,8 @@ const autoStartWindowsMac: AutoStart = {
     disable: () => app.setLoginItemSettings({ openAtLogin: false })
 };
 
-// The portal call uses the app id by default, which is org.chromium.Chromium, even in packaged Vegcord.
-// This leads to an autostart entry named "Chromium" instead of "Vegcord".
+// The portal call uses the app id by default, which is org.chromium.Chromium, even in packaged vegord.
+// This leads to an autostart entry named "Chromium" instead of "vegord".
 // Thus, only use the portal inside Flatpak, where the app is actually correct.
 // Maybe there is a way to fix it outside of flatpak, but I couldn't figure it out.
 export const autoStart =

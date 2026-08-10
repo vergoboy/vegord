@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -26,7 +26,7 @@ let onDevtoolsClose = () => {};
 ipcRenderer.on(IpcEvents.DEVTOOLS_OPENED, () => onDevtoolsOpen());
 ipcRenderer.on(IpcEvents.DEVTOOLS_CLOSED, () => onDevtoolsClose());
 
-export const VegcordNative = {
+export const vegordNative = {
     app: {
         relaunch: () => invoke<void>(IpcEvents.RELAUNCH),
         getVersion: () => sendSync<void>(IpcEvents.GET_VERSION),
@@ -35,12 +35,12 @@ export const VegcordNative = {
         getEnableHardwareAcceleration: () => sendSync<boolean>(IpcEvents.GET_ENABLE_HARDWARE_ACCELERATION),
         isOutdated: () => invoke<boolean>(IpcEvents.UPDATER_IS_OUTDATED),
         openUpdater: () => invoke<void>(IpcEvents.UPDATER_OPEN),
-        // used by vencord
-        getRendererCss: () => invoke<string>(IpcEvents.GET_VEGCORD_RENDERER_CSS),
+        // used by vegord
+        getRendererCss: () => invoke<string>(IpcEvents.GET_VEGORD_RENDERER_CSS),
         onRendererCssUpdate: (cb: (newCss: string) => void) => {
             if (!IS_DEV) return;
 
-            ipcRenderer.on(IpcEvents.VEGCORD_RENDERER_CSS_UPDATE, (_e, newCss: string) => cb(newCss));
+            ipcRenderer.on(IpcEvents.VEGORD_RENDERER_CSS_UPDATE, (_e, newCss: string) => cb(newCss));
         }
     },
     autostart: {
@@ -57,9 +57,9 @@ export const VegcordNative = {
         setUser: (user: { id: string; username: string } | null) => invoke<void>(IpcEvents.SYNC_SET_USER, user)
     },
     fileManager: {
-        isUsingCustomVencordDir: () => sendSync<boolean>(IpcEvents.IS_USING_CUSTOM_VENCORD_DIR),
-        showCustomVencordDir: () => invoke<void>(IpcEvents.SHOW_CUSTOM_VENCORD_DIR),
-        selectVencordDir: (value?: null) => invoke<"cancelled" | "invalid" | "ok">(IpcEvents.SELECT_VENCORD_DIR, value),
+        isUsingCustomvegordDir: () => sendSync<boolean>(IpcEvents.IS_USING_CUSTOM_VEGORD_DIR),
+        showCustomvegordDir: () => invoke<void>(IpcEvents.SHOW_CUSTOM_VEGORD_DIR),
+        selectvegordDir: (value?: null) => invoke<"cancelled" | "invalid" | "ok">(IpcEvents.SELECT_VEGORD_DIR, value),
         chooseUserAsset: (asset: string, value?: null) =>
             invoke<"cancelled" | "invalid" | "ok" | "failed">(IpcEvents.CHOOSE_USER_ASSET, asset, value)
     },

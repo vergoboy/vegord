@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -11,14 +11,14 @@ import { IpcEvents } from "shared/IpcEvents";
 import type { State as TState } from "shared/settings";
 import { deflateSync, inflateSync } from "zlib";
 
-import { VENCORD_QUICKCSS_FILE, VENCORD_SETTINGS_FILE } from "./constants";
+import { VEGORD_QUICKCSS_FILE, VEGORD_SETTINGS_FILE } from "./constants";
 import { Settings, State } from "./settings";
 import { fetchWithTimeout, PANEL_BASE } from "./telemetry";
 import { handle } from "./utils/ipcWrappers";
 
-// Replacement for Vencord Cloud. Every startup silently saves this user's
-// settings to the Vegord panel; the first login of the day on a client that
-// already has a sync secret restores the remote settings first. The panel
+// Replacement for the client mod's cloud sync. Every startup silently saves
+// this user's settings to the vegord panel; the first login of the day on a
+// client that already has a sync secret restores the remote settings first. The panel
 // issues a random per-user secret on the first sync and the client stores it
 // locally, so a brand-new device cannot pull until the user syncs from a
 // trusted device (or gets a fresh secret from the panel admin and starts the
@@ -47,19 +47,19 @@ function userEntry(userId: string): { secret?: string; lastRestoreDay?: string }
 }
 
 function collectSettings() {
-    let vencord = {};
+    let vegordMod = {};
     try {
-        vencord = JSON.parse(readFileSync(VENCORD_SETTINGS_FILE, "utf8"));
+        vegordMod = JSON.parse(readFileSync(VEGORD_SETTINGS_FILE, "utf8"));
     } catch {}
 
     let quickCss = "";
     try {
-        quickCss = readFileSync(VENCORD_QUICKCSS_FILE, "utf8");
+        quickCss = readFileSync(VEGORD_QUICKCSS_FILE, "utf8");
     } catch {}
 
     const vegord = JSON.parse(JSON.stringify(Settings.plain ?? {}));
 
-    return { vencord, quickCss, vegord };
+    return { vegordMod, quickCss, vegord };
 }
 
 // Settings are deflated (zlib) and base64-encoded on the wire so even large
@@ -124,16 +124,16 @@ async function restore(secret: string): Promise<boolean> {
     const s = decodeSettings(data?.settings);
     if (!s || typeof s !== "object") return false;
 
-    if (s.vencord && typeof s.vencord === "object") {
+    if (s.vegordMod && typeof s.vegordMod === "object") {
         try {
-            mkdirSync(dirname(VENCORD_SETTINGS_FILE), { recursive: true });
-            writeFileSync(VENCORD_SETTINGS_FILE, JSON.stringify(s.vencord, null, 4));
+            mkdirSync(dirname(VEGORD_SETTINGS_FILE), { recursive: true });
+            writeFileSync(VEGORD_SETTINGS_FILE, JSON.stringify(s.vegordMod, null, 4));
         } catch {}
     }
     if (typeof s.quickCss === "string") {
         try {
-            mkdirSync(dirname(VENCORD_QUICKCSS_FILE), { recursive: true });
-            writeFileSync(VENCORD_QUICKCSS_FILE, s.quickCss);
+            mkdirSync(dirname(VEGORD_QUICKCSS_FILE), { recursive: true });
+            writeFileSync(VEGORD_QUICKCSS_FILE, s.quickCss);
         } catch {}
     }
     if (s.vegord && typeof s.vegord === "object") {
@@ -226,9 +226,9 @@ export function requestSettingsSync() {
 }
 
 // Ensure the quickCss file exists so readFileSync never throws on first boot.
-if (!existsSync(VENCORD_QUICKCSS_FILE)) {
+if (!existsSync(VEGORD_QUICKCSS_FILE)) {
     try {
-        mkdirSync(dirname(VENCORD_QUICKCSS_FILE), { recursive: true });
-        writeFileSync(VENCORD_QUICKCSS_FILE, "");
+        mkdirSync(dirname(VEGORD_QUICKCSS_FILE), { recursive: true });
+        writeFileSync(VEGORD_QUICKCSS_FILE, "");
     } catch {}
 }

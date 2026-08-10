@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="stylesheet" href="./debug.css" type="text/css" />
+    <title>vegord Debug</title>
+</head>
+<body>
+    <header class="topbar">
+        <div class="title">vegord Debug</div>
+        <div class="actions">
+            <button id="btn-rescan" type="button" title="Force a DoH server re-scan">Rescan DoH</button>
+            <button id="btn-clear" type="button" title="Clear the log buffer and file">Clear log</button>
+            <button id="btn-copy" type="button" title="Copy the log to the clipboard">Copy log</button>
+            <button id="btn-close" type="button" title="Close the panel">Close</button>
+        </div>
+    </header>
+
+    <section class="status">
+        <div class="card"><div class="k">Proxy</div><div class="v" id="st-proxy">-</div></div>
+        <div class="card"><div class="k">DoH</div><div class="v" id="st-doh">-</div></div>
+        <div class="card"><div class="k">Discord IP</div><div class="v" id="st-ip">-</div></div>
+        <div class="card"><div class="k">Connections</div><div class="v" id="st-conn">-</div></div>
+        <div class="card"><div class="k">Queries</div><div class="v" id="st-query">-</div></div>
+        <div class="card"><div class="k">Traffic</div><div class="v" id="st-traffic">-</div></div>
+    </section>
+
+    <section class="details">
+        <div class="detail" id="detail-doh"></div>
+        <div class="detail" id="detail-ips"></div>
+    </section>
+
+    <section class="logwrap">
+        <div class="logbar">
+            <label><input type="checkbox" id="autoscroll" checked /> autoscroll</label>
+            <span id="log-count"></span>
+        </div>
+        <div class="log" id="log"></div>
+    </section>
+
+    <script src="./debug.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -37,7 +37,7 @@ async function fetchAnnouncements() {
         for (const n of notifications) {
             if (!n?.id || knownIds.has(n.id)) continue;
             knownIds.add(n.id);
-            queue.push({ id: n.id, title: n.title || "Vegcord", body: n.body || "", url: n.url || null });
+            queue.push({ id: n.id, title: n.title || "vegord", body: n.body || "", url: n.url || null });
             added = true;
         }
         if (added) showNext(currentWin);
@@ -64,7 +64,7 @@ function bannerScript(ann: Announcement): string {
         header.style.cssText = "display:flex;align-items:center;margin-bottom:8px;";
         const brand = document.createElement("strong");
         brand.style.cssText = "font-size:12px;color:#8b93a7;letter-spacing:.3px;";
-        brand.textContent = "Vegcord Announcement";
+        brand.textContent = "vegord Announcement";
         const x = document.createElement("button");
         x.textContent = "\\u00d7";
         x.style.cssText = "margin-left:auto;background:none;border:none;color:#8b93a7;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;";

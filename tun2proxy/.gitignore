@@ -1,0 +1,14 @@
+tun2proxy-android-libs.zip
+tun2proxy-android-libs/
+tun2proxy.xcframework/
+.env
+project.xcworkspace/
+xcuserdata/
+.vs/
+.vscode/
+.VSCodeCounter/
+build/
+tmp/
+Cargo.lock
+target/
+.idea/

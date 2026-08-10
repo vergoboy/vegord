@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -15,23 +15,23 @@ const vegordDir = dirname(process.execPath);
 export const PORTABLE =
     process.platform === "win32" &&
     !process.execPath.toLowerCase().endsWith("electron.exe") &&
-    !existsSync(join(vegordDir, "Uninstall Vegcord.exe"));
+    !existsSync(join(vegordDir, "Uninstall vegord.exe"));
 
 export const DATA_DIR =
-    process.env.VENCORD_USER_DATA_DIR || (PORTABLE ? join(vegordDir, "Data") : join(app.getPath("userData")));
+    process.env.VEGORD_USER_DATA_DIR || (PORTABLE ? join(vegordDir, "Data") : join(app.getPath("userData")));
 
 mkdirSync(DATA_DIR, { recursive: true });
 
 export const SESSION_DATA_DIR = join(DATA_DIR, "sessionData");
 app.setPath("sessionData", SESSION_DATA_DIR);
 
-export const VENCORD_SETTINGS_DIR = join(DATA_DIR, "settings");
-mkdirSync(VENCORD_SETTINGS_DIR, { recursive: true });
-export const VENCORD_QUICKCSS_FILE = join(VENCORD_SETTINGS_DIR, "quickCss.css");
-export const VENCORD_SETTINGS_FILE = join(VENCORD_SETTINGS_DIR, "settings.json");
-export const VENCORD_THEMES_DIR = join(DATA_DIR, "themes");
+export const VEGORD_SETTINGS_DIR = join(DATA_DIR, "settings");
+mkdirSync(VEGORD_SETTINGS_DIR, { recursive: true });
+export const VEGORD_QUICKCSS_FILE = join(VEGORD_SETTINGS_DIR, "quickCss.css");
+export const VEGORD_SETTINGS_FILE = join(VEGORD_SETTINGS_DIR, "settings.json");
+export const VEGORD_THEMES_DIR = join(DATA_DIR, "themes");
 
-export const USER_AGENT = `Vegcord/${app.getVersion()} (https://github.com/vergoboy/Vegcord)`;
+export const USER_AGENT = `vegord/${app.getVersion()} (https://github.com/vergoboy/vegord)`;
 
 // dimensions shamelessly stolen from Discord Desktop :3
 export const MIN_WIDTH = 940;

@@ -8,7 +8,8 @@ use tokio::time::timeout;
 use crate::config::DOH_SERVERS;
 use crate::discord::DiscordManager;
 use crate::doh::DohClient;
-use crate::stats::now_iso;
+use crate::stats::{now_iso, StatsManager};
+use crate::tun::TunManager;
 
 /// Localhost-only control HTTP server for the Electron main process:
 ///   POST /scan   -> trigger an immediate DoH probe/rescan
@@ -24,6 +25,8 @@ use crate::stats::now_iso;
 pub async fn run_control_server(
     doh: Arc<DohClient>,
     discord: Arc<DiscordManager>,
+    stats: Arc<StatsManager>,
+    tun: Arc<TunManager>,
     port: u16,
     token: &str,
 ) {
@@ -41,6 +44,8 @@ pub async fn run_control_server(
         };
         let doh = Arc::clone(&doh);
         let discord = Arc::clone(&discord);
+        let stats = Arc::clone(&stats);
+        let tun = Arc::clone(&tun);
         let token = token.clone();
         tokio::spawn(async move {
             let mut buf = [0u8; 2048];
@@ -79,7 +84,7 @@ pub async fn run_control_server(
                     doh.trigger_rescan("control-api");
                     r#"{"ok":true}"#.to_string()
                 }
-                ("GET", "/status", true) => status_json(&doh, &discord),
+                ("GET", "/status", true) => status_json(&doh, &discord, &stats, &tun),
                 ("GET", "/status", false) => {
                     let _ = socket
                         .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -104,7 +109,12 @@ pub async fn run_control_server(
     }
 }
 
-fn status_json(doh: &Arc<DohClient>, discord: &Arc<DiscordManager>) -> String {
+fn status_json(
+    doh: &Arc<DohClient>,
+    discord: &Arc<DiscordManager>,
+    stats: &Arc<StatsManager>,
+    tun: &Arc<TunManager>,
+) -> String {
     use serde_json::json;
 
     let idx = doh.current_doh_index.load(std::sync::atomic::Ordering::Relaxed) % DOH_SERVERS.len();
@@ -126,6 +136,22 @@ fn status_json(doh: &Arc<DohClient>, discord: &Arc<DiscordManager>) -> String {
         })
         .collect();
 
+    // Per-IP Discord RTT + packet loss (feeds the internet-quality log).
+    let discord_ips: Vec<serde_json::Value> = discord
+        .get_ip_scores()
+        .iter()
+        .map(|(ip, rtt, loss)| {
+            json!({
+                "ip": ip.to_string(),
+                "rttMs": rtt,
+                "lossPct": loss
+            })
+        })
+        .collect();
+
+    let (conn_total, conn_ok, conn_filtered) = stats.conn_counts();
+    let (ul_bytes, dl_bytes) = stats.traffic_totals();
+
     json!({
         "ok": true,
         "currentDohIndex": idx,
@@ -133,7 +159,27 @@ fn status_json(doh: &Arc<DohClient>, discord: &Arc<DiscordManager>) -> String {
         "probeResults": probes,
         "totalSwitches": doh.total_switch_count.load(std::sync::atomic::Ordering::Relaxed),
         "discordBestIp": best_ip,
-        "discordBestRtt": best_rtt
+        "discordBestRtt": best_rtt,
+        "connections": {
+            "total": conn_total,
+            "ok": conn_ok,
+            "filtered": conn_filtered
+        },
+        "queries": {
+            "total": doh.total_queries.load(std::sync::atomic::Ordering::Relaxed),
+            "ok": doh.successful_queries.load(std::sync::atomic::Ordering::Relaxed),
+            "fail": doh.failed_queries.load(std::sync::atomic::Ordering::Relaxed)
+        },
+        "traffic": {
+            "ulBytes": ul_bytes,
+            "dlBytes": dl_bytes
+        },
+        "tun": {
+            "enabled": tun.enabled,
+            "running": tun.is_running(),
+            "routes": tun.route_count()
+        },
+        "discordIps": discord_ips
     })
     .to_string()
 }

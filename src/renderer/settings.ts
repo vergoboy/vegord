@@ -1,17 +1,17 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { useEffect, useReducer } from "@vencord/types/webpack/common";
 import { SettingsStore } from "shared/utils/SettingsStore";
 
-import { VegcordLogger } from "./logger";
+import { vegordLogger } from "./logger";
 import { localStorage } from "./utils";
 
-export const Settings = new SettingsStore(VegcordNative.settings.get());
-Settings.addGlobalChangeListener((o, p) => VegcordNative.settings.set(o, p));
+export const Settings = new SettingsStore(vegordNative.settings.get());
+Settings.addGlobalChangeListener((o, p) => vegordNative.settings.set(o, p));
 
 export function useSettings() {
     const [, update] = useReducer(x => x + 1, 0);
@@ -39,7 +39,7 @@ interface TState {
     };
 }
 
-const stateKey = "VegcordState";
+const stateKey = "vegordState";
 
 const currentState: TState = (() => {
     const stored = localStorage.getItem(stateKey);
@@ -47,7 +47,7 @@ const currentState: TState = (() => {
     try {
         return JSON.parse(stored);
     } catch (e) {
-        VegcordLogger.error("Failed to parse stored state", e);
+        vegordLogger.error("Failed to parse stored state", e);
         return {};
     }
 })();
@@ -55,7 +55,7 @@ const currentState: TState = (() => {
 export const State = new SettingsStore<TState>(currentState);
 State.addGlobalChangeListener((o, p) => localStorage.setItem(stateKey, JSON.stringify(o)));
 
-export function useVegcordState() {
+export function usevegordState() {
     const [, update] = useReducer(x => x + 1, 0);
 
     useEffect(() => {

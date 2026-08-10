@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -33,26 +33,26 @@ import { requestSettingsSync } from "./settingsSync";
 import { handle, handleSync } from "./utils/ipcWrappers";
 import { PopoutWindows } from "./utils/popout";
 import { isDeckGameMode, showGamePage } from "./utils/steamOS";
-import { isValidVencordInstall } from "./utils/vencordLoader";
-import { VENCORD_FILES_DIR } from "./vencordFilesDir";
+import { isValidVegordInstall } from "./utils/vegordLoader";
+import { VEGORD_FILES_DIR } from "./vegordFilesDir";
 
-handleSync(IpcEvents.GET_VENCORD_PRELOAD_SCRIPT, () =>
-    readFileSync(join(VENCORD_FILES_DIR, "vencordDesktopPreload.js"), "utf-8")
+handleSync(IpcEvents.GET_VEGORD_MOD_PRELOAD_SCRIPT, () =>
+    readFileSync(join(VEGORD_FILES_DIR, "vegordDesktopPreload.js"), "utf-8")
 );
-handleSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT, () =>
-    readFileSync(join(VENCORD_FILES_DIR, "vencordDesktopRenderer.js"), "utf-8")
+handleSync(IpcEvents.GET_VEGORD_MOD_RENDERER_SCRIPT, () =>
+    readFileSync(join(VEGORD_FILES_DIR, "vegordDesktopRenderer.js"), "utf-8")
 );
 
-const VEGCORD_RENDERER_JS_PATH = join(__dirname, "renderer.js");
-const VEGCORD_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
-handleSync(IpcEvents.GET_VEGCORD_RENDERER_SCRIPT, () => readFileSync(VEGCORD_RENDERER_JS_PATH, "utf-8"));
-handle(IpcEvents.GET_VEGCORD_RENDERER_CSS, () => readFile(VEGCORD_RENDERER_CSS_PATH, "utf-8"));
+const VEGORD_RENDERER_JS_PATH = join(__dirname, "renderer.js");
+const VEGORD_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
+handleSync(IpcEvents.GET_VEGORD_RENDERER_SCRIPT, () => readFileSync(VEGORD_RENDERER_JS_PATH, "utf-8"));
+handle(IpcEvents.GET_VEGORD_RENDERER_CSS, () => readFile(VEGORD_RENDERER_CSS_PATH, "utf-8"));
 
 if (IS_DEV) {
-    watch(VEGCORD_RENDERER_CSS_PATH, { persistent: false }, async () => {
+    watch(VEGORD_RENDERER_CSS_PATH, { persistent: false }, async () => {
         mainWin?.webContents.postMessage(
-            IpcEvents.VEGCORD_RENDERER_CSS_UPDATE,
-            await readFile(VEGCORD_RENDERER_CSS_PATH, "utf-8")
+            IpcEvents.VEGORD_RENDERER_CSS_UPDATE,
+            await readFile(VEGORD_RENDERER_CSS_PATH, "utf-8")
         );
     });
 }
@@ -90,15 +90,15 @@ handle(IpcEvents.RELAUNCH, async () => {
     app.exit();
 });
 
-handleSync(IpcEvents.IS_USING_CUSTOM_VENCORD_DIR, () => !!State.store.vencordDir);
-handle(IpcEvents.SHOW_CUSTOM_VENCORD_DIR, async () => {
-    const { vencordDir } = State.store;
-    if (!vencordDir) return;
+handleSync(IpcEvents.IS_USING_CUSTOM_VEGORD_DIR, () => !!State.store.vegordDir);
+handle(IpcEvents.SHOW_CUSTOM_VEGORD_DIR, async () => {
+    const { vegordDir } = State.store;
+    if (!vegordDir) return;
 
-    const stats = await stat(vencordDir);
+    const stats = await stat(vegordDir);
     if (!stats.isDirectory()) return;
 
-    shell.openPath(vencordDir);
+    shell.openPath(vegordDir);
 });
 
 function getWindow(e: IpcMainInvokeEvent, key?: string) {
@@ -139,9 +139,9 @@ handle(IpcEvents.SPELLCHECK_ADD_TO_DICTIONARY, (e, word: string) => {
     e.sender.session.addWordToSpellCheckerDictionary(word);
 });
 
-handle(IpcEvents.SELECT_VENCORD_DIR, async (_e, value?: null) => {
+handle(IpcEvents.SELECT_VEGORD_DIR, async (_e, value?: null) => {
     if (value === null) {
-        delete State.store.vencordDir;
+        delete State.store.vegordDir;
         return "ok";
     }
 
@@ -151,9 +151,9 @@ handle(IpcEvents.SELECT_VENCORD_DIR, async (_e, value?: null) => {
     if (!res.filePaths.length) return "cancelled";
 
     const dir = res.filePaths[0];
-    if (!isValidVencordInstall(dir)) return "invalid";
+    if (!isValidVegordInstall(dir)) return "invalid";
 
-    State.store.vencordDir = dir;
+    State.store.vegordDir = dir;
 
     return "ok";
 });

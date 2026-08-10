@@ -38,7 +38,7 @@ jobs:
       - name: Upload AppImage
         uses: actions/upload-artifact@v4
         with:
-          name: vesktop-appimage-${{ matrix.arch }}
+          name: vegord-appimage-${{ matrix.arch }}
           path: dist/*.AppImage
 
   build-windows:
@@ -78,7 +78,7 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: vesktop-windows-${{ matrix.arch }}
+          name: vegord-windows-${{ matrix.arch }}
           path: |
             dist/*.zip
             dist/*.exe
@@ -100,21 +100,21 @@ jobs:
 
       - name: Package
         run: |
-          tar czf ../vesktop-gfw-proxy.tar.gz --transform='s/^/vesktop-gfw-proxy-1.6.5\//' .
+          tar czf ../vegord-gfw-proxy.tar.gz --transform='s/^/vegord-gfw-proxy-1.6.5\//' .
           cd ..
           mkdir -p src
-          cp vesktop-gfw-proxy.tar.gz src/
-          cd Vesktop
+          cp vegord-gfw-proxy.tar.gz src/
+          cd vegord
           # Simple packaging: zip the dist + static
           mkdir -p dist/arch
           cp -r dist/js static package.json LICENSE dist/arch/
           cd dist/arch
-          tar czf ../vesktop-gfw-proxy-1.6.5-2-any.pkg.tar.gz .
+          tar czf ../vegord-gfw-proxy-1.6.5-2-any.pkg.tar.gz .
 
       - name: Upload Arch package
         uses: actions/upload-artifact@v4
         with:
-          name: vesktop-arch
+          name: vegord-arch
           path: dist/*.pkg.tar.gz
 
   release:
@@ -125,7 +125,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: vesktop-*
+          pattern: vegord-*
           merge-multiple: true
 
       - name: Create Release

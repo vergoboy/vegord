@@ -1,13 +1,13 @@
-# Maintainer: Vegcord with GFW proxy
+# Maintainer: vegord with GFW proxy
 # Build from local source tree. Run: makepkg -si
 # NOTE: Run pnpm build first
 
 pkgname=vegord-gfw-proxy
 pkgver=1.7.3
 pkgrel=1
-pkgdesc="Vegcord - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
+pkgdesc="vegord - Custom Discord desktop app with built-in GFW-resistant proxy (SOCKS5 + DoH fragment)"
 arch=('x86_64' 'aarch64')
-url="https://github.com/vergoboy/Vegcord"
+url="https://github.com/vergoboy/vegord"
 license=('GPL3')
 depends=(
     'electron>=43'
@@ -22,6 +22,19 @@ optdepends=(
 install=vegord.install
 options=(!purge !strip !zipman)
 noextract=()
+
+build() {
+    cd "$startdir"
+    # Build the GFW-resistant Rust proxy.
+    (cd gfw_proxy_rs && cargo build --release --locked) || return 1
+    install -Dm755 gfw_proxy_rs/target/release/gfw_proxy static/gfw_proxy/gfw_proxy
+    # Build the tun2proxy relay (Discord split tunnel). Optional: the package
+    # still installs without it, only the discordTunTunnel feature is lost.
+    if [ -d tun2proxy ]; then
+        (cd tun2proxy && cargo build --release --bin tun2proxy-bin --locked) || true
+        install -Dm755 tun2proxy/target/release/tun2proxy-bin static/gfw_proxy/tun2proxy-bin 2>/dev/null || true
+    fi
+}
 
 package() {
     cd "$startdir"
@@ -39,7 +52,7 @@ package() {
 
     install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/vegord.desktop" <<EOF
 [Desktop Entry]
-Name=Vegcord
+Name=vegord
 Comment=Custom Discord desktop app with GFW-resistant proxy
 Exec=/opt/vegord/vegord.sh %U
 Icon=vegord
@@ -48,12 +61,12 @@ Type=Application
 Categories=Network;InstantMessaging;Chat;
 MimeType=x-scheme-handler/discord;
 StartupWMClass=vegord
-Keywords=discord;vencord;electron;chat;
+Keywords=discord;vegord;electron;chat;
 EOF
 
     install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/vegord-gfw.desktop" <<EOF
 [Desktop Entry]
-Name=Vegcord GFW
+Name=vegord GFW
 Comment=Custom Discord desktop app with GFW-resistant proxy
 Exec=/opt/vegord/vegord.sh %U
 Icon=vegord
@@ -62,7 +75,7 @@ Type=Application
 Categories=Network;InstantMessaging;Chat;
 MimeType=x-scheme-handler/discord;
 StartupWMClass=vegord
-Keywords=discord;vencord;electron;chat;
+Keywords=discord;vegord;electron;chat;
 EOF
 
     install -Dm755 /dev/stdin "${pkgdir}/opt/vegord/vegord.sh" <<'SCRIPT'

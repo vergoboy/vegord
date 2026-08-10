@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -10,7 +10,7 @@ import { copyFile, mkdir, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 
-import vencordDep from "./vencordDep.mjs";
+import vegordDep from "./vegordDep.mjs";
 import { includeDirPlugin } from "./includeDirPlugin.mts";
 
 const isDev = process.argv.includes("--dev");
@@ -87,7 +87,7 @@ async function copyGfwProxyWrapper() {
     throw new Error("Rust proxy build failed and no prebuilt binary exists; refusing to ship without a proxy");
 }
 
-async function copyLibVegcord() {
+async function copyLibvegord() {
     if (process.platform !== "linux") return;
 
     try {
@@ -98,7 +98,7 @@ async function copyLibVegcord() {
         console.log("Using local libvegord build");
     } catch {
         console.log(
-            "Using prebuilt libvegord binaries. Run `pnpm buildLibVegcord` and build again to build from source - see README.md for more details"
+            "Using prebuilt libvegord binaries. Run `pnpm buildLibvegord` and build again to build from source - see README.md for more details"
         );
         return Promise.all([
             copyFile("./packages/libvegord/prebuilds/vegord-x64.node", "./static/dist/libvegord-x64.node"),
@@ -109,50 +109,56 @@ async function copyLibVegcord() {
 
 await Promise.all([
     copyVenmic(),
-    copyLibVegcord(),
+    copyLibvegord(),
     copyGfwProxyWrapper(),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/index.ts"],
         outfile: "dist/js/main.js",
-        footer: { js: "//# sourceURL=VegcordMain" }
+        footer: { js: "//# sourceURL=vegordMain" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/arrpc/worker.ts"],
         outfile: "dist/js/arRpcWorker.js",
-        footer: { js: "//# sourceURL=VegcordArRpcWorker" }
+        footer: { js: "//# sourceURL=vegordArRpcWorker" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/index.ts"],
         outfile: "dist/js/preload.js",
-        footer: { js: "//# sourceURL=VegcordPreload" }
+        footer: { js: "//# sourceURL=vegordPreload" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/splash.ts"],
         outfile: "dist/js/splashPreload.js",
-        footer: { js: "//# sourceURL=VegcordSplashPreload" }
+        footer: { js: "//# sourceURL=vegordSplashPreload" }
+    }),
+    createContext({
+        ...NodeCommonOpts,
+        entryPoints: ["src/preload/debug.ts"],
+        outfile: "dist/js/debugPreload.js",
+        footer: { js: "//# sourceURL=vegordDebugPreload" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/updater.ts"],
         outfile: "dist/js/updaterPreload.js",
-        footer: { js: "//# sourceURL=VegcordUpdaterPreload" }
+        footer: { js: "//# sourceURL=vegordUpdaterPreload" }
     }),
     createContext({
         ...CommonOpts,
-        globalName: "Vegcord",
+        globalName: "vegordApp",
         entryPoints: ["src/renderer/index.ts"],
         outfile: "dist/js/renderer.js",
         format: "iife",
         inject: ["./scripts/build/injectReact.mjs"],
-        jsxFactory: "VencordCreateElement",
-        jsxFragment: "VencordFragment",
+        jsxFactory: "vegordCreateElement",
+        jsxFragment: "vegordFragment",
         external: ["@vencord/types/*"],
-        plugins: [vencordDep, includeDirPlugin("patches", "src/renderer/patches")],
-        footer: { js: "//# sourceURL=VegcordRenderer" }
+        plugins: [vegordDep, includeDirPlugin("patches", "src/renderer/patches")],
+        footer: { js: "//# sourceURL=vegordRenderer" }
     })
 ]);
 

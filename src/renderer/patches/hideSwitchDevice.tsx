@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -18,6 +18,6 @@ addPatch({
     ],
 
     shouldIgnoreDevice(state: any) {
-        return Object.keys(state.lastDeviceConnected ?? {})[0] === "vencord-screen-share";
+        return Object.keys(state.lastDeviceConnected ?? {})[0] === "vegord-screen-share";
     }
 });

@@ -1,18 +1,18 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { globalExternalsWithRegExp } from "@fal-works/esbuild-plugin-global-externals";
 
 const names = {
-    webpack: "Vencord.Webpack",
-    "webpack/common": "Vencord.Webpack.Common",
-    utils: "Vencord.Util",
-    api: "Vencord.Api",
-    "api/settings": "Vencord",
-    components: "Vencord.Components"
+    webpack: "vegord.Webpack",
+    "webpack/common": "vegord.Webpack.Common",
+    utils: "vegord.Util",
+    api: "vegord.Api",
+    "api/settings": "vegord",
+    components: "vegord.Components"
 };
 
 export default globalExternalsWithRegExp({

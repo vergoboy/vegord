@@ -1,13 +1,13 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { filters, waitFor } from "@vencord/types/webpack";
 import { RelationshipStore } from "@vencord/types/webpack/common";
 
-import { VegcordLogger } from "./logger";
+import { vegordLogger } from "./logger";
 import { Settings } from "./settings";
 
 let GuildReadStateStore: any;
@@ -25,9 +25,9 @@ export function setBadge() {
         let totalCount = mentionCount + pendingRequests;
         if (!totalCount && hasUnread && !disableUnreadBadge) totalCount = -1;
 
-        VegcordNative.app.setBadgeCount(totalCount);
+        vegordNative.app.setBadgeCount(totalCount);
     } catch (e) {
-        VegcordLogger.error("Failed to update badge count", e);
+        vegordLogger.error("Failed to update badge count", e);
     }
 }
 

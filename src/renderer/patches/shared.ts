@@ -1,12 +1,12 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { Patch } from "@vencord/types/utils/types";
 
-window.VegcordPatchGlobals = {};
+window.vegordPatchGlobals = {};
 
 interface PatchData {
     patches: Omit<Patch, "plugin">[];
@@ -17,8 +17,8 @@ export function addPatch<P extends PatchData>(p: P) {
     const { patches, ...globals } = p;
 
     for (const patch of patches) {
-        Vencord.Plugins.addPatch(patch, "Vegcord", "VegcordPatchGlobals");
+        vegord.Plugins.addPatch(patch, "vegord", "vegordPatchGlobals");
     }
 
-    Object.assign(VegcordPatchGlobals, globals);
+    Object.assign(vegordPatchGlobals, globals);
 }

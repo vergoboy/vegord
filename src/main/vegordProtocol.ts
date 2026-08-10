@@ -1,13 +1,13 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { app, protocol } from "electron";
 
-import { handleVegcordAssetsProtocol } from "./userAssets";
-import { handleVegcordStaticProtocol } from "./vegordStatic";
+import { handlevegordAssetsProtocol } from "./userAssets";
+import { handlevegordStaticProtocol } from "./vegordStatic";
 
 app.whenReady().then(() => {
     protocol.handle("vegord", async req => {
@@ -15,9 +15,9 @@ app.whenReady().then(() => {
 
         switch (url.hostname) {
             case "assets":
-                return handleVegcordAssetsProtocol(url.pathname, req);
+                return handlevegordAssetsProtocol(url.pathname, req);
             case "static":
-                return handleVegcordStaticProtocol(url.pathname, req);
+                return handlevegordStaticProtocol(url.pathname, req);
             default:
                 return new Response(null, { status: 404 });
         }

@@ -5,7 +5,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream, UdpSocket};
+use tokio::net::{TcpListener, TcpStream};
 use tokio::time::{timeout, Instant};
 
 use crate::config::{Config, RelayConfig};
@@ -13,12 +13,14 @@ use crate::discord::DiscordManager;
 use crate::doh::DohClient;
 use crate::fragment::send_fragmented_async;
 use crate::stats::{now_iso, StatsManager};
+use crate::tun::{self, TunManager};
 
 pub struct ProxyServer {
     config: Config,
     doh: Arc<DohClient>,
     discord: Arc<DiscordManager>,
     stats: Arc<StatsManager>,
+    tun: Arc<TunManager>,
     // Temporary fragmentation override used by the preset benchmark phase to
     // try several (num_fragment, sleep_ms) configs on real traffic without
     // touching the process-wide config. None = use config defaults.
@@ -32,14 +34,26 @@ impl ProxyServer {
         discord: Arc<DiscordManager>,
         stats: Arc<StatsManager>,
         frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>>,
+        tun: Arc<TunManager>,
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
             doh,
             discord,
             stats,
+            tun,
             frag_override,
         })
+    }
+
+    /// SO_MARK for outbound sockets when the split tunnel is active, so the
+    /// proxy's own connections bypass the Discord TUN routes (loop avoidance).
+    fn fwmark(&self) -> Option<u32> {
+        if self.config.tun_split_enabled {
+            Some(self.config.tun_fwmark)
+        } else {
+            None
+        }
     }
 
     /// Resolve the fragmentation parameters to apply to relayed ClientHellos:
@@ -190,7 +204,8 @@ impl ProxyServer {
     }
 
     async fn handle_udp_associate(&self, mut client: TcpStream) {
-        let udp_socket = match UdpSocket::bind("127.0.0.1:0").await {
+        let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
+        let udp_socket = match tun::bind_udp(bind_addr, self.fwmark()).await {
             Ok(s) => s,
             Err(_) => {
                 let _ = client
@@ -228,6 +243,7 @@ impl ProxyServer {
         // silently breaking the voice channel.
         let stats = Arc::clone(&self.stats);
         let discord = Arc::clone(&self.discord);
+        let tun = Arc::clone(&self.tun);
         let udp_heartbeat_sec = self.config.udp_heartbeat_sec;
         let udp_loss_window_sec = self.config.udp_loss_window_sec;
         tokio::spawn(async move {
@@ -289,6 +305,9 @@ impl ProxyServer {
 
                                     if let (Some(target_ip), true) = (target_ip_opt, header_len > 0 && n > header_len) {
                                         let payload = &buf[header_len..n];
+                                        // Keep the split tunnel routing the voice
+                                        // endpoint even if it left the DoH pool.
+                                        tun.record_extra_ip(target_ip);
                                         // Discord sends to the literal voice IP; remember the
                                         // original so failover can swap the IP silently.
                                         if target_addr.is_none() {
@@ -567,7 +586,15 @@ impl ProxyServer {
         // has its own budget independent of the handshake / idle / bulk phases.
         let timeout_sec = self.config.connect_deadline_sec;
 
-        let stream_res = timeout(Duration::from_secs(timeout_sec), TcpStream::connect(addr)).await;
+        // With the split tunnel active the connect must be marked so it bypasses
+        // the Discord TUN routes, and the target is recorded for route sync.
+        self.tun.record_extra_ip(ip);
+        let fwmark = self.fwmark();
+        let stream_res = timeout(
+            Duration::from_secs(timeout_sec),
+            tun::connect_tcp(addr, fwmark),
+        )
+        .await;
         match stream_res {
             Ok(Ok(stream)) => {
                 let _ = stream.set_nodelay(true);
@@ -715,7 +742,7 @@ impl ProxyServer {
         let addr = SocketAddr::new(relay_ip, relay.port);
         let connect = timeout(
             Duration::from_secs(self.config.connect_deadline_sec),
-            TcpStream::connect(addr),
+            tun::connect_tcp(addr, self.fwmark()),
         )
         .await
         .map_err(|_| {

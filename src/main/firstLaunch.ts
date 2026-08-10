@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -53,7 +53,7 @@ export function createFirstLaunchTour() {
         if (data.autoStart) autoStart.enable();
 
         if (data.importSettings) {
-            const from = join(app.getPath("userData"), "..", "Vencord", "settings");
+            const from = join(app.getPath("userData"), "..", "vegord", "settings");
             const to = join(DATA_DIR, "settings");
             try {
                 const files = readdirSync(from);
@@ -64,9 +64,9 @@ export function createFirstLaunchTour() {
                 }
             } catch (e) {
                 if (e instanceof Error && "code" in e && e.code === "ENOENT") {
-                    console.log("No Vencord settings found to import.");
+                    console.log("No vegord settings found to import.");
                 } else {
-                    console.error("Failed to import Vencord settings:", e);
+                    console.error("Failed to import vegord settings:", e);
                 }
             }
         }

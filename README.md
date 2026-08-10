@@ -2,24 +2,24 @@
 
 A custom Discord desktop app with a **built-in GFW-resistant proxy** for regions where Discord is throttled or blocked.
 
-Fork of [Vesktop](https://github.com/Vencord/Vesktop) with Vencord preinstalled plus a high-performance Rust SOCKS5/HTTP proxy that tunnels Discord traffic past Deep Packet Inspection and DNS poisoning.
+Fork of [Vencord](https://github.com/Vendicated/Vencord) with Vencord preinstalled plus a high-performance Rust SOCKS5/HTTP proxy that tunnels Discord traffic past Deep Packet Inspection and DNS poisoning.
 
 ## Features
 
-- **Everything from upstream Vesktop**: Vencord preinstalled, lightweight, Linux screenshare with sound & Wayland
+- **Everything from upstream vegord**: vegord preinstalled, lightweight, Linux screenshare with sound & Wayland
 - **Built-in GFW-resistant proxy**: high-performance Rust proxy (`gfw_proxy_rs`) exposing SOCKS5 on `127.0.0.1:4500`
 - **DNS-over-HTTPS (DoH)**: resolves via 37+ DoH servers (Cloudflare, Google, Quad9, ...) to bypass DNS poisoning
 - **TCP fragmentation**: splits the TLS ClientHello into fragments to evade DPI
 - **Smart Discord IP routing**: pings discovered Discord IPs and routes to the fastest one, with an offline DNS cache as fallback
 - **Voice-optimized**: longer timeouts for voice/TURN connections, WebRTC forced through the proxy
 - **Auto-starts** on launch (use `--no-proxy` to disable)
-- **No conflict** with upstream Vesktop — separate app/executable names
+- **No conflict** with upstream vegord — separate app/executable names
 
 ## Installation
 
 ### Windows
 
-Grab the latest NSIS installer (`Vegcord Setup <version>.exe`) from the [Releases](https://github.com/vergoboy/vegord/releases) page, or the portable ZIP (`Vegcord-<version>-win.zip` for x64, `-arm64-win.zip` for ARM64).
+Grab the latest NSIS installer (`vegord Setup <version>.exe`) from the [Releases](https://github.com/vergoboy/vegord/releases) page, or the portable ZIP (`vegord-<version>-win.zip` for x64, `-arm64-win.zip` for ARM64).
 
 ### Arch Linux
 
@@ -70,7 +70,7 @@ cp gfw_proxy_rs/target/x86_64-pc-windows-gnu/release/gfw_proxy.exe static/gfw_pr
 npx electron-builder --win
 ```
 
-Outputs land in `dist/` (`Vegcord Setup <version>.exe`, `Vegcord-<version>-win.zip`, ...).
+Outputs land in `dist/` (`vegord Setup <version>.exe`, `vegord-<version>-win.zip`, ...).
 
 ## Usage
 
@@ -78,7 +78,7 @@ Outputs land in `dist/` (`Vegcord Setup <version>.exe`, `Vegcord-<version>-win.z
 # Run with the built-in proxy (default):
 vegord
 
-# Run without the proxy (plain Vesktop behavior):
+# Run without the proxy (plain vegord behavior):
 vegord --no-proxy
 
 # Use a custom proxy instead of the built-in one:
@@ -121,7 +121,7 @@ The Rust proxy is configured via CLI flags (`--port`, `--data-dir`) in `src/main
 If voice channels fail or have high ping:
 
 1. **Check logs**: Run from terminal and look for `[GFW Proxy]` and `[VOICE]` tags
-2. **WebRTC internals**: Open `chrome://webrtc-internals` in the app (from Vencord dev tools)
+2. **WebRTC internals**: Open `chrome://webrtc-internals` in the app (from vegord dev tools)
 3. **Try without proxy**: `vegord --no-proxy` to isolate if the proxy is the issue
 4. **Adjust WebRTC policy**: Settings → WebRTC IP Handling Policy → `disable_non_proxied_udp` (default when proxy is active)
 5. **Socket timeout**: If voice connects but drops after ~60s, increase `voice_socket_timeout`
@@ -183,4 +183,4 @@ curl --proxy socks5://127.0.0.1:4500 https://discord.com
 
 ## License
 
-GPL-3.0-or-later — same as upstream Vesktop.
+GPL-3.0-or-later — same as upstream vegord.

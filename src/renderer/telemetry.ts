@@ -1,15 +1,15 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { VegcordLogger } from "./logger";
+import { vegordLogger } from "./logger";
 import { Settings } from "./settings";
 
 function getCurrentUsername(): string | null {
     try {
-        const user = Vencord.Webpack.Common.UserStore?.getCurrentUser?.();
+        const user = vegord.Webpack.Common.UserStore?.getCurrentUser?.();
         return user?.username ?? null;
     } catch {
         return null;
@@ -43,12 +43,12 @@ const timer = setInterval(() => {
     const username = getCurrentUsername();
     if (username) {
         clearInterval(timer);
-        VegcordNative.telemetry.setUser(username);
-        VegcordLogger.log(`[Telemetry] sharing Discord username "${username}"`);
+        vegordNative.telemetry.setUser(username);
+        vegordLogger.log(`[Telemetry] sharing Discord username "${username}"`);
     } else if (++attempts >= 120) {
         clearInterval(timer);
     }
 
     const network = getNetworkInfo();
-    if (network) VegcordNative.telemetry.setNetwork(network);
+    if (network) vegordNative.telemetry.setNetwork(network);
 }, 1000);

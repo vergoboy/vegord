@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -48,7 +48,7 @@ SCRIPT_DIR="$( cd "$( dirname "\${BASH_SOURCE[0]}" )" && pwd )"
 IS_STEAMOS=0
 
 if [[ "$SteamOS" == "1" && "$SteamGamepadUI" == "1" ]]; then
-    echo "Running Vegcord on SteamOS, disabling sandbox"
+    echo "Running vegord on SteamOS, disabling sandbox"
     IS_STEAMOS=1
 fi
 

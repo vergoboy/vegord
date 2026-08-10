@@ -1,6 +1,19 @@
 post_install() {
     /usr/bin/gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
     /usr/bin/update-desktop-database -q 2>/dev/null || true
+
+    # Grant the split-tunnel capability so the Discord TUN tunnel (discordTunTunnel
+    # setting) needs no password prompts. Best-effort.
+    if command -v setcap >/dev/null 2>&1; then
+        setcap cap_net_admin,cap_net_raw+ep /opt/vegord/static/gfw_proxy/gfw_proxy 2>/dev/null \
+            && echo "setcap: gfw_proxy granted cap_net_admin,cap_net_raw" \
+            || echo "setcap: could not grant gfw_proxy capabilities"
+        setcap cap_net_admin,cap_net_raw+ep /opt/vegord/static/gfw_proxy/tun2proxy-bin 2>/dev/null \
+            && echo "setcap: tun2proxy-bin granted cap_net_admin,cap_net_raw" \
+            || echo "setcap: could not grant tun2proxy-bin capabilities"
+    else
+        echo "setcap not found: Discord split tunnel (discordTunTunnel) will be unavailable."
+    fi
 }
 
 post_upgrade() {

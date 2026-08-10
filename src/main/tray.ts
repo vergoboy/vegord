@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2025 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -11,7 +11,7 @@ import { AppEvents } from "./events";
 import { Settings } from "./settings";
 import { resolveAssetPath } from "./userAssets";
 import { clearData } from "./utils/clearData";
-import { ensureVencordFiles } from "./utils/vencordLoader";
+import { ensureVegordFiles } from "./utils/vegordLoader";
 
 let tray: Tray;
 let trayVariant: "tray" | "trayUnread" = "tray";
@@ -53,15 +53,15 @@ export async function initTray(win: BrowserWindow, setIsQuitting: (val: boolean)
             click: createAboutWindow
         },
         {
-            label: "Repair Vencord",
+            label: "Repair vegord",
             async click() {
-                await ensureVencordFiles(true);
+                await ensureVegordFiles(true);
                 app.relaunch();
                 app.quit();
             }
         },
         {
-            label: "Reset Vegcord",
+            label: "Reset vegord",
             async click() {
                 await clearData(win);
             }
@@ -86,7 +86,7 @@ export async function initTray(win: BrowserWindow, setIsQuitting: (val: boolean)
     ]);
 
     tray = new Tray(await resolveAssetPath(trayVariant));
-    tray.setToolTip("Vegcord");
+    tray.setToolTip("vegord");
     tray.setContextMenu(trayMenu);
     tray.on("click", onTrayClick);
 }

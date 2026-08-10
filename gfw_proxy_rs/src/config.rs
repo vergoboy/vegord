@@ -94,6 +94,14 @@ pub struct Config {
     // Upstream SOCKS5 relay for Discord (bypasses the Cloudflare-Spectrum dead
     // end). None = legacy direct/offline-DNS path.
     pub relay_socks5: Option<RelayConfig>,
+    // Split-tunnel: tun2proxy relays a TUN device (which routes only Discord
+    // IPs) into our own SOCKS5 entry point. Off by default; requires
+    // CAP_NET_ADMIN on the gfw_proxy binary (setcap at install).
+    pub tun_split_enabled: bool,
+    pub tun_name: String,
+    pub tun_fwmark: u32,
+    pub tun_table: u32,
+    pub tun2proxy_bin: String,
 }
 
 impl Default for Config {
@@ -136,6 +144,11 @@ impl Default for Config {
             panel_timeout_sec: 6,
             panel_upload_token: String::new(),
             relay_socks5: None,
+            tun_split_enabled: false,
+            tun_name: "vegord0".to_string(),
+            tun_fwmark: 0x54f,
+            tun_table: 100,
+            tun2proxy_bin: "tun2proxy-bin".to_string(),
         }
     }
 }

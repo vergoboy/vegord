@@ -51,6 +51,22 @@ impl StatsManager {
         *dl.entry(ip).or_insert(0) += bytes;
     }
 
+    /// (total, ok, filtered) proxy connection counts.
+    pub fn conn_counts(&self) -> (u64, u64, u64) {
+        (
+            self.conn_total.load(Ordering::Relaxed),
+            self.conn_success.load(Ordering::Relaxed),
+            self.conn_filtered.load(Ordering::Relaxed),
+        )
+    }
+
+    /// (ul_bytes, dl_bytes) across all endpoints since process start.
+    pub fn traffic_totals(&self) -> (u64, u64) {
+        let ul: u64 = self.ul_traffic.read().values().sum();
+        let dl: u64 = self.dl_traffic.read().values().sum();
+        (ul, dl)
+    }
+
     pub fn start_log_writer(self: Arc<Self>) {
         tokio::spawn(async move {
             let log_interval = Duration::from_secs(self.config.log_every_sec);

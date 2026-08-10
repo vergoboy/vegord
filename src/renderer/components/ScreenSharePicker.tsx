@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -35,7 +35,7 @@ import { FluxDispatcher, MediaEngineStore, Select, UserStore, useState } from "@
 import { Node } from "@vencord/venmic";
 import type { Dispatch, SetStateAction } from "react";
 import { addPatch } from "renderer/patches/shared";
-import { State, useSettings, useVegcordState } from "renderer/settings";
+import { State, useSettings, usevegordState } from "renderer/settings";
 import { isLinux, isWindows } from "renderer/utils";
 
 import { SimpleErrorBoundary } from "./SimpleErrorBoundary";
@@ -77,7 +77,7 @@ interface Source {
 
 export let currentSettings: StreamSettings | null = null;
 
-const logger = new Logger("VegcordScreenShare");
+const logger = new Logger("vegordScreenShare");
 
 addPatch({
     patches: [
@@ -131,7 +131,7 @@ if (isLinux) {
                 return;
             }
 
-            VegcordNative.virtmic.stop();
+            vegordNative.virtmic.stop();
         });
 
         FluxDispatcher.subscribe("STREAM_UPDATE", ({ streamKey }: { streamKey: string }) => {
@@ -139,7 +139,7 @@ if (isLinux) {
                 return;
             }
 
-            VegcordNative.virtmic.unmute();
+            vegordNative.virtmic.unmute();
         });
     });
 }
@@ -157,11 +157,11 @@ export function openScreenSharePicker(screens: Source[], skipPicker: boolean) {
 
                         if (v.includeSources && v.includeSources !== "None") {
                             if (v.includeSources === "Entire System") {
-                                await VegcordNative.virtmic.startSystem(
+                                await vegordNative.virtmic.startSystem(
                                     !v.excludeSources || isSpecialSource(v.excludeSources) ? [] : v.excludeSources
                                 );
                             } else {
-                                await VegcordNative.virtmic.start(v.includeSources);
+                                await vegordNative.virtmic.start(v.includeSources);
                             }
                         }
 
@@ -372,7 +372,7 @@ function StreamSettingsUi({
     const qualitySettings = State.store.screenshareQuality!;
 
     const [thumb] = useAwaiter(
-        () => (skipPicker ? Promise.resolve(source.url) : VegcordNative.capturer.getLargeThumbnail(source.id)),
+        () => (skipPicker ? Promise.resolve(source.url) : vegordNative.capturer.getLargeThumbnail(source.id)),
         {
             fallbackValue: source.url,
             deps: [source.id]
@@ -582,7 +582,7 @@ function AudioSourcePickerLinux({
     setExcludeSources: (s: AudioSources) => void;
 }) {
     const [audioSourcesSignal, refreshAudioSources] = useForceUpdater(true);
-    const [sources, _, loading] = useAwaiter(() => VegcordNative.virtmic.list(), {
+    const [sources, _, loading] = useAwaiter(() => vegordNative.virtmic.list(), {
         fallbackValue: { ok: true, targets: [], hasPipewirePulse: true },
         deps: [audioSourcesSignal]
     });
@@ -594,7 +594,7 @@ function AudioSourcePickerLinux({
         return (
             <Paragraph>
                 Failed to retrieve Audio Sources because your C++ library is too old to run
-                <a href="https://github.com/Vencord/venmic" target="_blank" rel="noreferrer">
+                <a href="https://github.com/vegord/venmic" target="_blank" rel="noreferrer">
                     venmic
                 </a>
                 . See{" "}
@@ -718,7 +718,7 @@ function ModalComponent({
         audio: false,
         includeSources: "None"
     });
-    const qualitySettings = (useVegcordState().screenshareQuality ??= {
+    const qualitySettings = (usevegordState().screenshareQuality ??= {
         resolution: "720",
         frameRate: "30"
     });

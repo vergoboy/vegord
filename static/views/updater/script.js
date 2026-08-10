@@ -1,4 +1,4 @@
-const { update, version: currentVersion } = await VegcordUpdaterNative.getData();
+const { update, version: currentVersion } = await vegordUpdaterNative.getData();
 
 document.getElementById("current-version").textContent = currentVersion;
 document.getElementById("new-version").textContent = update.version;
@@ -43,7 +43,7 @@ document.getElementById("update-button").addEventListener("click", () => {
 
     updateDialog.showModal();
 
-    VegcordUpdaterNative.installUpdate().then(() => {
+    vegordUpdaterNative.installUpdate().then(() => {
         downloadProgress.value = 100;
         updateDialog.closedBy = "any";
 
@@ -52,16 +52,16 @@ document.getElementById("update-button").addEventListener("click", () => {
     });
 });
 
-document.getElementById("later-button").addEventListener("click", () => VegcordUpdaterNative.snoozeUpdate());
+document.getElementById("later-button").addEventListener("click", () => vegordUpdaterNative.snoozeUpdate());
 document.getElementById("ignore-button").addEventListener("click", () => {
     const confirmed = confirm(
         "Are you sure you want to ignore this update? You will not be notified about this update again. Updates are important for security and stability."
     );
-    if (confirmed) VegcordUpdaterNative.ignoreUpdate();
+    if (confirmed) vegordUpdaterNative.ignoreUpdate();
 });
 
-VegcordUpdaterNative.onProgress(percent => (downloadProgress.value = percent));
-VegcordUpdaterNative.onError(message => {
+vegordUpdaterNative.onProgress(percent => (downloadProgress.value = percent));
+vegordUpdaterNative.onError(message => {
     updateDialog.closedBy = "any";
     errorText.textContent = `An error occurred while downloading the update: ${message}`;
     installingDialog.close();

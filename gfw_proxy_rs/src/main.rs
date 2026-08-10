@@ -7,6 +7,7 @@ mod fragment;
 mod preset;
 mod proxy;
 mod stats;
+mod tun;
 
 use std::env;
 use std::path::PathBuf;
@@ -57,6 +58,15 @@ async fn main() -> std::io::Result<()> {
             config.relay_socks5 = Some(relay);
         }
     }
+    if let Ok(v) = env::var("VEGORD_TUN_SPLIT") {
+        config.tun_split_enabled = v == "1" || v.eq_ignore_ascii_case("true");
+    }
+    if let Ok(bin) = env::var("VEGORD_TUN2PROXY_BIN") {
+        config.tun2proxy_bin = bin;
+    }
+    if let Ok(name) = env::var("VEGORD_TUN_NAME") {
+        config.tun_name = name;
+    }
 
     // Apply the last known-good preset (local benchmark or downloaded server
     // preset) BEFORE CLI parsing so explicit user flags always win over the
@@ -105,6 +115,30 @@ async fn main() -> std::io::Result<()> {
                 }
                 i += 2;
             }
+            "--tun-split" => {
+                config.tun_split_enabled = true;
+                i += 1;
+            }
+            "--tun-name" if i + 1 < args.len() => {
+                config.tun_name = args[i + 1].clone();
+                i += 2;
+            }
+            "--tun-fwmark" if i + 1 < args.len() => {
+                if let Ok(m) = args[i + 1].parse::<u32>() {
+                    config.tun_fwmark = m;
+                }
+                i += 2;
+            }
+            "--tun-table" if i + 1 < args.len() => {
+                if let Ok(t) = args[i + 1].parse::<u32>() {
+                    config.tun_table = t;
+                }
+                i += 2;
+            }
+            "--tun2proxy-bin" if i + 1 < args.len() => {
+                config.tun2proxy_bin = args[i + 1].clone();
+                i += 2;
+            }
             _ => {
                 i += 1;
             }
@@ -134,12 +168,51 @@ async fn main() -> std::io::Result<()> {
     let discord_mgr = DiscordManager::new();
     let doh_client = DohClient::new(config.clone(), Arc::clone(&discord_mgr));
     let stats_mgr = StatsManager::new(config.clone(), Arc::clone(&doh_client), Arc::clone(&discord_mgr));
+    let tun_mgr = tun::TunManager::new(&config);
 
     // Start background Discord IP benchmarking & ping loop
     discord_mgr.clone().start_pinger(config.clone());
 
     // Start background traffic & health log writer task
     stats_mgr.clone().start_log_writer();
+
+    // Split-tunnel (tun2proxy) for Discord-only traffic, when enabled.
+    if config.tun_split_enabled {
+        let tun_start = Arc::clone(&tun_mgr);
+        let tun_discord = Arc::clone(&discord_mgr);
+        let tun_port = config.listen_port;
+        tokio::spawn(async move {
+            tun_start.start(tun_discord, tun_port).await;
+        });
+    }
+
+    // Clean shutdown: tear down the split tunnel (routes, rules, tun2proxy
+    // child) before exiting so Discord is never left pointed at a dead TUN.
+    let tun_sig = Arc::clone(&tun_mgr);
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            if let Ok(mut sigterm) =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            {
+                let _ = sigterm.recv().await;
+                tun_sig.stop().await;
+                std::process::exit(0);
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = tokio::signal::ctrl_c().await;
+            tun_sig.stop().await;
+            std::process::exit(0);
+        }
+    });
+    let tun_ctrl_c = Arc::clone(&tun_mgr);
+    tokio::spawn(async move {
+        let _ = tokio::signal::ctrl_c().await;
+        tun_ctrl_c.stop().await;
+        std::process::exit(0);
+    });
 
     // Bind the proxy listener BEFORE spawning dependent tasks so the startup
     // DoH probe can route through the proxy immediately. Bound to 127.0.0.1
@@ -164,9 +237,11 @@ async fn main() -> std::io::Result<()> {
     // Localhost control API for the Electron main process.
     let ctrl_doh = Arc::clone(&doh_client);
     let ctrl_discord = Arc::clone(&discord_mgr);
+    let ctrl_stats = Arc::clone(&stats_mgr);
+    let ctrl_tun = Arc::clone(&tun_mgr);
     let ctrl_token = config.control_token.clone();
     tokio::spawn(async move {
-        control::run_control_server(ctrl_doh, ctrl_discord, config.control_port, &ctrl_token).await;
+        control::run_control_server(ctrl_doh, ctrl_discord, ctrl_stats, ctrl_tun, config.control_port, &ctrl_token).await;
     });
 
     // ISP-aware preset sync: benchmark this network, save a local preset,
@@ -190,6 +265,7 @@ async fn main() -> std::io::Result<()> {
         discord_mgr,
         stats_mgr,
         frag_override,
+        tun_mgr,
     );
 
     proxy_server.run(listener).await

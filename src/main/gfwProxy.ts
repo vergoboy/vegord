@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vegcord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -10,6 +10,7 @@ import { existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
 import { logError, logInfo, logWarn } from "./connectionLog";
+import { fileLog } from "./fileLog";
 import { Settings } from "./settings";
 
 let proxyProcess: ChildProcess | null = null;
@@ -21,7 +22,7 @@ let proxyProcess: ChildProcess | null = null;
 // is unreliable (Windows).
 let controlBindConfirmedBy: ChildProcess | null = null;
 
-// Last-known startup failure details, surfaced to the user in the "Vegcord
+// Last-known startup failure details, surfaced to the user in the "vegord
 // requires the GFW proxy" dialog so the reason is actionable instead of a
 // generic "could not start its network proxy".
 let lastSpawnError: string | null = null;
@@ -35,12 +36,14 @@ export function getLastProxyDiagnostics(): string | null {
 const PROXY_PORT = 4500;
 const PROXY_HOST = "127.0.0.1";
 const CONTROL_PORT = 4501;
+const TUN2PROXY_BIN = "tun2proxy-bin";
 
 // Lines from the Rust proxy that are worth uploading to the panel's connection log.
 const PROXY_LOG_MARKERS = [
     "[INIT]",
     "[START]",
     "[CTRL]",
+    "[TUN]",
     "[DoH SWITCH]",
     "[DoH BLACKLIST]",
     "[DoH PROBE]",
@@ -96,6 +99,20 @@ function findRustBinary(dir: string): string | null {
     return null;
 }
 
+// tun2proxy (the TUN relay) ships alongside the gfw_proxy binary. Same lookup
+// cascade as findRustBinary so both source checkouts and packaged installs work.
+function findTun2ProxyBinary(): string | null {
+    const candidates = [
+        join(__dirname, "..", "..", "static", "gfw_proxy", TUN2PROXY_BIN),
+        join("/opt/vegord", "static", "gfw_proxy", TUN2PROXY_BIN),
+        join(__dirname, "..", "..", "tun2proxy", "target", "release", TUN2PROXY_BIN)
+    ];
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) return candidate;
+    }
+    return null;
+}
+
 function spawnProxy() {
     const dir = getProxyDir();
     const rustBinary = findRustBinary(dir);
@@ -126,6 +143,17 @@ function spawnProxy() {
             proxyArgs.push("--relay-socks5", relaySpec);
             console.log(`${logPrefix} Discord traffic will use upstream SOCKS5 relay ${relaySpec.split("@").pop()}`);
         }
+        if (Settings.store.discordTunTunnel === true) {
+            const tun2Proxy = findTun2ProxyBinary();
+            if (tun2Proxy) {
+                proxyArgs.push("--tun-split", "--tun2proxy-bin", tun2Proxy);
+                console.log(`${logPrefix} Discord split tunnel enabled (tun2proxy: ${tun2Proxy})`);
+            } else {
+                console.warn(
+                    `${logPrefix} discordTunTunnel is on but tun2proxy-bin was not found; split tunnel not started`
+                );
+            }
+        }
         child = spawn(rustBinary, proxyArgs, {
             cwd: dirname(rustBinary),
             stdio: ["ignore", "pipe", "pipe"],
@@ -142,6 +170,8 @@ function spawnProxy() {
             for (const line of data.toString().trim().split("\n")) {
                 if (!line) continue;
                 console.log(`${logPrefix} ${line}`);
+                // Full packet/connection trace goes to the local debug log.
+                fileLog("proxy", "info", line);
                 if (line.includes("[CTRL] control server listening")) controlBindConfirmedBy = child;
                 if (PROXY_LOG_MARKERS.some(m => line.includes(m))) logInfo(`proxy ${line.trim()}`);
             }
@@ -151,6 +181,7 @@ function spawnProxy() {
             for (const line of data.toString().trim().split("\n")) {
                 if (line) {
                     console.error(`${logPrefix} ${line}`);
+                    fileLog("proxy", "error", line);
                     logWarn(`proxy_stderr ${line.trim()}`);
                 }
             }

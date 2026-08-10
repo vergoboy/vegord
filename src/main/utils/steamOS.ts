@@ -1,6 +1,6 @@
 /*
- * Vegcord, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * vegord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2023 Vendicated and vegord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -14,7 +14,7 @@ import { State } from "../settings";
 // Bump this to re-show the prompt
 const layoutVersion = 2;
 // Get this from "show details" on the profile after exporting as a shared personal layout or using share with community
-const layoutId = "3080264545"; // Vegcord Layout v2
+const layoutId = "3080264545"; // vegord Layout v2
 const numberRegex = /^[0-9]*$/;
 
 let steamPipeQueue = Promise.resolve();
@@ -78,8 +78,8 @@ export async function askToApplySteamLayout(win: BrowserWindow) {
 
     // Touch screen breaks in some menus when native touch mode is enabled on latest SteamOS beta, remove most of the update specific text once that's fixed.
     const { response } = await dialog.showMessageBox(win, {
-        message: `${update ? "Update" : "Apply"} Vegcord Steam Input Layout?`,
-        detail: `Would you like to ${update ? "Update" : "Apply"} Vegcord's recommended Steam Deck controller settings?
+        message: `${update ? "Update" : "Apply"} vegord Steam Input Layout?`,
+        detail: `Would you like to ${update ? "Update" : "Apply"} vegord's recommended Steam Deck controller settings?
 ${update ? "Click yes using the touchpad" : "Tap yes"}, then press the X button or tap Apply Layout to confirm.${
             update ? " Doing so will undo any customizations you have made." : ""
         }
