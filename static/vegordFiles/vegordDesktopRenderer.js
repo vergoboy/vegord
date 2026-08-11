@@ -167,29 +167,22 @@ code, pre, .hljs {
 }
 /* ==UserStyle==
 @name         Bubble Theme (Vegord)
-@description  Telegram-style message bubbles for Discord/Vegord — v5.
-@version      5.0.0
+@description  Telegram-style message bubbles for Discord/Vegord — v6.
+@version      6.0.0
 ==/UserStyle== */
 
 /*
-  v5 — palette rebuilt from the Telegram-FOSS night theme
-  (TMessagesProj/src/main/assets/night.attheme):
-
-      chat_outBubble        #366caf   (own bubbles)
-      chat_outBubbleSelected#4b7daf
-      chat_inBubble         #1f2123   (incoming bubbles)
-      chat_inBubbleSelected #314a61
-      chat_wallpaper        #0f0f10
-      chat_outBubbleText    #ffffff
-      chat_messageLinkOut   #aedfff
-      chat_messageLinkIn    #79c4fc
-      chat_attachActiveTab  #6abfff   (accent)
-      chat_serviceBackground#373737
+  v6 — rebuilt against the real message-list DOM:
+    - everything scoped to [data-list-id="chat-messages"]
+    - bubbles targeted via "contents > messageContent" so the quoted
+      text inside reply chips (which also carries id^="message-content-")
+      is never styled as a bubble again
+    - own-message name header fully clipped (no more leaked username
+      overlapping the timestamp)
+    - forced direction:rtl removed — Discord already emits markupRtl
+      per message, and the leading bidi block handles the rest
+  Palette: Telegram-FOSS night.attheme (out #366caf / in #1f2123 / #6abfff)
 */
-
-/* ==========================================================================
-   TOKENS
-   ========================================================================== */
 
 :root {
   --bt-radius: 16px;
@@ -207,99 +200,42 @@ code, pre, .hljs {
 }
 
 /* ==========================================================================
-   HARD SAFETY CLAMP — whatever else does or doesn't match, nothing should
-   ever be able to render wider than the channel. This alone should stop
-   own bubbles from poking past the screen edge even if other rules below
-   are silently failing to match.
+   ROW — Telegram bubbles shrink to content and hug one side. A table is the
+   most reliable "all children share the resolved width" primitive.
    ========================================================================== */
 
-li[class*="messageListItem_"],
-[class*="cozyMessage_"],
-[class*="contents_"],
-[id^="message-content-"],
-[id^="message-reply-context-"],
-[id^="message-accessories-"] {
+[data-list-id="chat-messages"] [class*="cozyMessage"] {
+  display: table !important;
   max-width: min(var(--bt-max-w), 90%) !important;
   box-sizing: border-box !important;
 }
+[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="cozyMessage"] { margin-inline-start: 16px !important; margin-inline-end: 16px !important; }
+[data-list-id="chat-messages"] li.vc-own-message [class*="cozyMessage"] { margin-inline-start: auto !important; margin-inline-end: 16px !important; }
 
-/* ==========================================================================
-   WRAPPER — reply-quote / header / bubble share one width. 'display:table'
-   is the old, extremely reliable way to get "shrinks to the widest child,
-   but every child still fills that resolved width" — the same effect
-   Grid was going for, with fewer ways to go wrong.
-   ========================================================================== */
-
-[class*="cozyMessage_"] {
-  display: table !important;
-}
-li:not(.vc-own-message) [class*="cozyMessage_"] { margin-inline-start: 16px !important; }
-li.vc-own-message      [class*="cozyMessage_"] { margin-inline-start: auto !important; margin-inline-end: 16px !important; }
-
-[id^="message-reply-context-"],
-[class*="contents_"] {
+[data-list-id="chat-messages"] [class*="contents_"] {
   display: block !important;
   width: 100% !important;
+  position: relative !important;
 }
-[class*="contents_"] { position: relative !important; }
 
 /* ==========================================================================
-   AVATAR
+   AVATAR — own avatars hidden (Telegram), incoming float left
    ========================================================================== */
 
-li.vc-own-message [class*="contents_"] img[class*="avatar_"],
-li.vc-own-message img[class*="avatar_"] { display: none !important; }
-img[class*="avatarDecoration_"] { display: none !important; }
-[class*="contents_"] > img[class*="avatar_"] {
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] img[class*="avatar_"],
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > img[class*="avatar"] { display: none !important; }
+[data-list-id="chat-messages"] img[class*="avatarDecoration"] { display: none !important; }
+[data-list-id="chat-messages"] [class*="contents_"] > img[class*="avatar"] {
   float: left; width: 30px; height: 30px; border-radius: 11px; margin: 2px 8px 0 0;
 }
-li:not(.vc-own-message) span[class*="timestamp_"][class*="alt_"] { width: var(--bt-gutter) !important; display: inline-block !important; text-align: center; font-size: 10px; }
-li.vc-own-message span[class*="timestamp_"][class*="alt_"] { display: none !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message) span[class*="timestamp_"][class*="alt_"] { width: var(--bt-gutter) !important; display: inline-block !important; text-align: center; font-size: 10px; }
+[data-list-id="chat-messages"] li.vc-own-message span[class*="timestamp_"][class*="alt_"] { display: none !important; }
 
 /* ==========================================================================
-   BUBBLE
+   HEADER (name bar) — incoming only; own messages get it clipped to zero
    ========================================================================== */
 
-[id^="message-content-"] {
-  display: block !important;
-  clear: both;
-  padding: 7px 10px 6px !important;
-  filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.3));
-  border-radius: var(--bt-radius) !important;
-}
-li:not(.vc-own-message) [id^="message-content-"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
-li.vc-own-message [id^="message-content-"] { background: var(--bt-out-bg) !important; color: var(--bt-out-text) !important; }
-
-li:not(.vc-own-message).vc-tg-first [id^="message-content-"],
-li:not(.vc-own-message).vc-tg-only  [id^="message-content-"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
-li:not(.vc-own-message).vc-tg-mid  [id^="message-content-"],
-li:not(.vc-own-message).vc-tg-last [id^="message-content-"] { border-top-left-radius: var(--bt-radius-tight) !important; }
-li.vc-own-message.vc-tg-mid  [id^="message-content-"],
-li.vc-own-message.vc-tg-last [id^="message-content-"] { border-top-right-radius: var(--bt-radius-tight) !important; }
-li:not(.vc-own-message).vc-tg-first [id^="message-content-"],
-li:not(.vc-own-message).vc-tg-mid   [id^="message-content-"] { border-bottom-left-radius: var(--bt-radius-tight) !important; }
-li.vc-own-message.vc-tg-first [id^="message-content-"],
-li.vc-own-message.vc-tg-mid   [id^="message-content-"] { border-bottom-right-radius: var(--bt-radius-tight) !important; }
-
-li:not(.vc-own-message).vc-tg-last [id^="message-content-"]::after,
-li:not(.vc-own-message).vc-tg-only [id^="message-content-"]::after {
-  content: ""; position: absolute; z-index: -1; bottom: 3px; left: -6px;
-  width: 14px; height: 14px; border-radius: 4px; transform: rotate(45deg);
-  background: var(--bt-in-bg);
-}
-li.vc-own-message.vc-tg-last [id^="message-content-"]::after,
-li.vc-own-message.vc-tg-only [id^="message-content-"]::after {
-  content: ""; position: absolute; z-index: -1; bottom: 3px; right: -6px;
-  width: 14px; height: 14px; border-radius: 4px; transform: rotate(45deg);
-  background: var(--bt-out-bg);
-}
-
-/* ==========================================================================
-   HEADER (name) — hidden entirely for own messages, several fallback
-   selector shapes since I can't confirm which one actually matches
-   ========================================================================== */
-
-h3[class*="header_"], [class*="header_"]:is(h3, div) {
+[data-list-id="chat-messages"] [class*="contents_"] > h3[class*="header_"] {
   direction: ltr !important;
   display: block !important;
   width: 100% !important;
@@ -308,28 +244,71 @@ h3[class*="header_"], [class*="header_"]:is(h3, div) {
   padding: 5px 10px 2px !important;
   border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
 }
-li:not(.vc-own-message) h3[class*="header_"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > h3[class*="header_"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > h3[class*="header_"] span[class*="username"] { color: #79c4fc !important; }
 
-li.vc-own-message h3[class*="header_"],
-li.vc-own-message [class*="header_"] {
-  background: transparent !important;
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > h3[class*="header_"] {
   height: 0 !important;
   padding: 0 !important;
-  overflow: visible !important;
+  margin: 0 !important;
+  background: transparent !important;
+  overflow: hidden !important;
+  border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
 }
-li.vc-own-message span[class*="username_"],
-li.vc-own-message [class*="headerText_"] { display: none !important; }
-span[class*="username_"] { font-weight: 700 !important; font-size: 12.5px !important; }
-li:not(.vc-own-message) span[class*="username_"] { color: #79c4fc !important; }
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > h3[class*="header_"] > span[class*="headerText"] { display: none !important; }
 
-li[class*="hasReply_"] h3[class*="header_"] { border-radius: 0 !important; }
+/* bubble is flush under its name bar (and flush under the reply chip) */
+[data-list-id="chat-messages"] [class*="contents_"] > h3[class*="header_"] + [class*="messageContent"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
+[data-list-id="chat-messages"] [id^="message-reply-context-"] + [class*="contents_"] > h3[class*="header_"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
 
 /* ==========================================================================
-   REPLY QUOTE — forced dark chip, native gold spine/border removed
+   BUBBLE
    ========================================================================== */
 
-[id^="message-reply-context-"],
-[class*="repliedMessage_"] {
+[data-list-id="chat-messages"] [class*="contents_"] > [class*="messageContent"] {
+  display: block !important;
+  clear: both;
+  padding: 7px 10px 6px !important;
+  filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.3));
+  border-radius: var(--bt-radius) !important;
+  box-sizing: border-box !important;
+}
+[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > [class*="messageContent"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > [class*="messageContent"] { background: var(--bt-out-bg) !important; color: var(--bt-out-text) !important; }
+
+/* grouping corners — Telegram: the bubble next to the previous one hugs tight */
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-first [class*="contents_"] > [class*="messageContent"],
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-only  [class*="contents_"] > [class*="messageContent"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid   [class*="contents_"] > [class*="messageContent"],
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last  [class*="contents_"] > [class*="messageContent"] { border-top-left-radius: var(--bt-radius-tight) !important; }
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid  [class*="contents_"] > [class*="messageContent"],
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [class*="contents_"] > [class*="messageContent"] { border-top-right-radius: var(--bt-radius-tight) !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-first [class*="contents_"] > [class*="messageContent"],
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid   [class*="contents_"] > [class*="messageContent"] { border-bottom-left-radius: var(--bt-radius-tight) !important; }
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-first [class*="contents_"] > [class*="messageContent"],
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid   [class*="contents_"] > [class*="messageContent"] { border-bottom-right-radius: var(--bt-radius-tight) !important; }
+
+/* tail corner for the last bubble of a group */
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last [class*="contents_"] > [class*="messageContent"]::after,
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-only  [class*="contents_"] > [class*="messageContent"]::after {
+  content: ""; position: absolute; z-index: -1; bottom: 3px; left: -6px;
+  width: 14px; height: 14px; border-radius: 4px; transform: rotate(45deg);
+  background: var(--bt-in-bg);
+}
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [class*="contents_"] > [class*="messageContent"]::after,
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-only  [class*="contents_"] > [class*="messageContent"]::after {
+  content: ""; position: absolute; z-index: -1; bottom: 3px; right: -6px;
+  width: 14px; height: 14px; border-radius: 4px; transform: rotate(45deg);
+  background: var(--bt-out-bg);
+}
+
+/* ==========================================================================
+   REPLY QUOTE — dark chip, native gold spine removed; quoted text is NOT a
+   bubble (it is scoped out by the "contents > messageContent" selector)
+   ========================================================================== */
+
+[data-list-id="chat-messages"] [id^="message-reply-context-"],
+[data-list-id="chat-messages"] [class*="repliedMessage"] {
   display: block !important;
   border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
   padding: 5px 10px !important;
@@ -343,26 +322,26 @@ li[class*="hasReply_"] h3[class*="header_"] { border-radius: 0 !important; }
   border-left: none !important;
   box-shadow: none !important;
 }
-li:not(.vc-own-message) [id^="message-reply-context-"] { background: var(--bt-in-bg-dark) !important; color: var(--bt-in-text) !important; }
-li.vc-own-message [id^="message-reply-context-"] { background: var(--bt-out-bg-dark) !important; color: var(--bt-out-text) !important; }
-[class*="repliedMessageClickableSpine_"] { display: none !important; }
-[id^="message-reply-context-"] img[class*="replyAvatar_"] { width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-inline-end: 4px; }
+[data-list-id="chat-messages"] li:not(.vc-own-message) [id^="message-reply-context-"] { background: var(--bt-in-bg-dark) !important; color: var(--bt-in-text) !important; }
+[data-list-id="chat-messages"] li.vc-own-message [id^="message-reply-context-"] { background: var(--bt-out-bg-dark) !important; color: var(--bt-out-text) !important; }
+[data-list-id="chat-messages"] [class*="repliedMessageClickableSpine"] { display: none !important; }
+[data-list-id="chat-messages"] [id^="message-reply-context-"] img[class*="replyAvatar"] { width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-inline-end: 4px; }
+[data-list-id="chat-messages"] [id^="message-reply-context-"] span[class*="username"] { color: var(--bt-accent) !important; font-weight: 600; }
 
-/* kill Discord's native "you were mentioned" tint wherever it's actually
-   coming from — try both the row and the reply box */
-li[class*="mentioned_"],
-[class*="mentioned_"] {
+/* kill Discord's native mention tint */
+[data-list-id="chat-messages"] li[class*="mentioned"],
+[data-list-id="chat-messages"] [class*="mentioned"] {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
 }
-li[class*="mentioned_"] [id^="message-content-"] { box-shadow: inset 0 0 0 1.5px var(--bt-accent) !important; }
+[data-list-id="chat-messages"] li[class*="mentioned"] [class*="contents_"] > [class*="messageContent"] { box-shadow: inset 0 0 0 1.5px var(--bt-accent) !important; }
 
 /* ==========================================================================
-   TIMESTAMP
+   TIMESTAMP — bottom-right inside the bubble
    ========================================================================== */
 
-span[class*="timestampInline_"] {
+[data-list-id="chat-messages"] span[class*="timestampInline"] {
   position: absolute !important;
   bottom: 6px !important;
   right: 8px !important;
@@ -375,16 +354,10 @@ span[class*="timestampInline_"] {
 }
 
 /* ==========================================================================
-   TEXT — RTL baseline
-   ========================================================================== */
-
-[class*="messageContent_"] { direction: rtl !important; text-align: right !important; }
-
-/* ==========================================================================
    EDITED — icon only
    ========================================================================== */
 
-[class*="edited_"] {
+[data-list-id="chat-messages"] [class*="edited"] {
   display: inline-block !important; width: 11px; height: 11px;
   margin-inline-start: 5px; font-size: 0 !important; vertical-align: -1px;
   background-color: currentColor; opacity: .7;
@@ -397,13 +370,13 @@ span[class*="timestampInline_"] {
    ACCESSORIES — images, embeds, reactions
    ========================================================================== */
 
-[id^="message-accessories-"] { width: fit-content !important; }
-li:not(.vc-own-message) [id^="message-accessories-"] { margin-inline-start: calc(16px + var(--bt-gutter)) !important; }
-li.vc-own-message [id^="message-accessories-"] { margin-inline-start: auto !important; margin-inline-end: 16px !important; }
+[data-list-id="chat-messages"] [id^="message-accessories-"] { width: 100% !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message) [id^="message-accessories-"] { margin-inline-start: calc(16px + var(--bt-gutter)) !important; }
+[data-list-id="chat-messages"] li.vc-own-message [id^="message-accessories-"] { margin-inline-start: auto !important; margin-inline-end: 16px !important; }
 
-[class*="reaction__"] { border-radius: 10px !important; }
-[class*="reactionMe__"] { background: var(--bt-accent-soft) !important; border-color: var(--bt-accent) !important; }
-[class*="embedFull_"] { max-width: 100% !important; border-radius: 8px !important; }
+[data-list-id="chat-messages"] [class*="reaction"] { border-radius: 10px !important; }
+[data-list-id="chat-messages"] [class*="reactionMe"] { background: var(--bt-accent-soft) !important; border-color: var(--bt-accent) !important; }
+[data-list-id="chat-messages"] [class*="embedFull"] { max-width: 100% !important; border-radius: 8px !important; }
 `;function p4(e){let t=document.getElementById("vegord-rtl-css");if(e&&!t){let o=document.createElement("style");o.id="vegord-rtl-css",o.textContent=_k,document.head.appendChild(o)}else!e&&t&&t.remove()};function vgTg(e){let t=window.__vcTgObs;if(e){if(!t){let tag=()=>{let a=[...document.querySelectorAll("[class*='messageListItem']")];let isM=l=>!!l&&typeof l.className=="string"&&l.className.includes("messageListItem");let id=()=>{try{return L.getCurrentUser()?.id}catch{return null}};let authorOf=n=>{if(!n)return null;if(typeof n.className=="string"&&n.className.includes("isAuthor"))return{key:"__own",own:!0};if(n.querySelector?.("[class*='isAuthor']"))return{key:"__own",own:!0};let k=Object.keys(n).find(c=>c.startsWith("__reactFiber$")||c.startsWith("__reactInternalInstance$"));if(!k)return null;let f=n[k],u=id();for(;f;f=f.return){let m=f.memoizedProps?.message;if(m&&m.author){let au=m.author;return{key:String(au.id??au.username??""),own:!!u&&String(au.id)===String(u)}}}return null};a.forEach(n=>{let au=authorOf(n),key=au&&au.key,ow=!!(au&&au.own);n.classList.toggle("vc-own-message",ow);let p=n.previousElementSibling,s=n.nextElementSibling,a1=authorOf(p),a2=authorOf(s),first=!isM(p)||!key||!a1||a1.key!==key,last=!isM(s)||!key||!a2||a2.key!==key;n.classList.toggle("vc-tg-first",first);n.classList.toggle("vc-tg-last",last);n.classList.toggle("vc-tg-only",first&&last);n.querySelectorAll("[class*='timestamp']").forEach(t=>{let a=(t.getAttribute&&t.getAttribute("aria-label"))||t.textContent||"";let m=String(a).match(/[0-9٠-٩]{1,2}:[0-9٠-٩]{2}(?:\s*[AP]\.?M\.?)?/i);m&&t.textContent!==m[0]&&(t.textContent=m[0])})})};let o=()=>requestAnimationFrame(tag),n=()=>o();o();window.__vcTgObs=new MutationObserver(n);window.__vcTgObs.observe(document.body,{childList:!0,subtree:!0});window.__vcTgIv=setInterval(o,2e3);let hv=ev=>{let l=ev.target&&ev.target.closest?ev.target.closest("[class*='messageListItem']"):null;l&&document.body.classList.toggle("vc-tg-hover-left",!l.classList.contains("vc-own-message"))};document.addEventListener("mouseover",hv);window.__vcTgHoverH=hv}}else{t&&(t.disconnect(),window.__vcTgObs=void 0);clearInterval(window.__vcTgIv);window.__vcTgIv=void 0;document.querySelectorAll(".vc-own-message,.vc-tg-first,.vc-tg-last,.vc-tg-only").forEach(n=>n.classList.remove("vc-own-message","vc-tg-first","vc-tg-last","vc-tg-only"));document.body.classList.remove("vc-tg-hover-left");window.__vcTgHoverH&&(document.removeEventListener("mouseover",window.__vcTgHoverH),window.__vcTgHoverH=void 0)}}function m4(e){let t=document.getElementById("vegord-vazir-font-link"),o=document.getElementById("vegord-vazir-font-css");if(e&&!t){let n=document.createElement("link");n.id="vegord-vazir-font-link",n.rel="stylesheet",n.type="text/css",n.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(n);let i=document.createElement("style");i.id="vegord-vazir-font-css",i.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(i)}else e||(t&&t.remove(),o&&o.remove())}function Ek({isShown:e}){return r("svg",{viewBox:"0 0 27 27",width:18,height:18,className:"vc-toolbox-icon"},e?r("path",{fill:"currentColor",d:"M12 2C9.24 2 7 4.24 7 7c0 1.45.67 2.76 1.73 3.7L7 13v7c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-7l3.27-2.3C16.33 9.76 17 8.45 17 7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-4 7l2 1.5V16H8v-2.5l2-1.5zm8 0V16h-3v-2.5l2-1.5zM7 18v2h10v-2H7z"}):r("path",{fill:"currentColor",d:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h2v6h-2zm0 8h2v2h-2z"}))}function Ok(){let e=Oe(null),[t,o]=k(!1);return r(nn,{position:"bottom",align:"right",animation:nn.Animation.NONE,shouldShow:t,onRequestClose:()=>o(!1),targetElementRef:e,renderPopout:()=>f4(()=>o(!1))},(n,{isShown:i})=>r(Lk,{ref:e,className:"vc-toolbox-btn",onClick:()=>o(s=>!s),tooltip:i?null:"Vegord Toolbox",icon:()=>r(Ek,{isShown:i}),selected:i}))}var Ls=h({name:"vegordToolbox",description:"Adds a button to the titlebar that houses vegord quick actions",tags:["Utility","Developers"],authors:[m.Ven,m.AutumnVN],required:!0,enabledByDefault:!0,settings:Wa,start(){p4(this.settings.store.rtlEnabled),vgTg(this.settings.store.rtlEnabled),m4(this.settings.store.vazirfontEnabled)},stop(){p4(!1),vgTg(!1),m4(!1)},patches:[{find:'?"BACK_FORWARD_NAVIGATION":',replacement:{match:/(trailing:.{0,50}?)\i\.Fragment,(?=\{children:\[)/,replace:"$1$self.TrailingWrapper,"}}],TrailingWrapper({children:e}){return r(p,null,e,r(R,{key:"vc-toolbox",noop:!0},r(Ok,null)))}});function Uk(e){return r("svg",{viewBox:"0 0 24 24",width:24,height:24,fill:"url(#heartGrad)",...e},r("defs",null,r("linearGradient",{id:"heartGrad",x1:"0",y1:"0",x2:"1",y2:"1"},r("stop",{offset:"0%",stopColor:"#8B5CF6"}),r("stop",{offset:"100%",stopColor:"#D946EF"}))),r("path",{d:"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"}))}function Bk(){let{showPluginMenu:e}=Wa.use(["showPluginMenu"]),t=_v();return e?r(C.MenuItem,{id:"plugins",label:"Plugins",action:()=>En(La)},t):null}function Fk(){let{rtlEnabled:e,vazirfontEnabled:t}=Wa.use(["rtlEnabled","vazirfontEnabled"]);return r(p,null,r(C.MenuCheckboxItem,{id:"vegord-toolbox-rtl",label:"Message Bubble",checked:e,action:()=>{let o=!e;Wa.store.rtlEnabled=o,p4(o),vgTg(o)}}),r(C.MenuCheckboxItem,{id:"vegord-toolbox-vazirfont",label:"Vazirmatn Font",checked:t,action:()=>{let o=!t;if(Wa.store.vazirfontEnabled=o,o){if(!document.getElementById("vegord-vazir-font-link")){let i=document.createElement("link");i.id="vegord-vazir-font-link",i.rel="stylesheet",i.type="text/css",i.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(i);let s=document.createElement("style");s.id="vegord-vazir-font-css",s.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(s)}}else{let n=document.getElementById("vegord-vazir-font-link");n&&n.remove();let i=document.getElementById("vegord-vazir-font-css");i&&i.remove()}}}))}function _v(e=!1){let t=Re().plugins,[o,n]=k(""),i=o.toLowerCase(),s=me(()=>Object.values(qe).sort((c,u)=>c.name.localeCompare(u.name)),[]),a=me(()=>s.filter(c=>!Ie(c.name)||c.name.endsWith("API")?!1:c.name.toLowerCase().includes(i)),[i]);return r(p,null,r(C.MenuControlItem,{id:"plugins-search",control:(c,u)=>r(C.MenuSearchControl,{...c,query:o,onChange:n,ref:u})}),r(C.MenuSeparator,null),a.map(c=>{let u=[],d=!1;if(c.settings)for(let[v,S]of Object.entries(c.settings.def)){if(Ra(c.settings,S))continue;d=!0;let b=t[c.name],y={id:`${c.name}-${v}`,key:v,label:Mn(ec(v)),disabled:Zo(c.settings,S)};switch(S.type){case 3:u.push(r(C.MenuCheckboxItem,{...y,checked:b[v],action:()=>{b[v]=!b[v],S.restartNeeded&&Ue("Restart to apply the change")}}));break;case 4:u.push(r(C.MenuItem,{...y},S.options.map(w=>r(C.MenuRadioItem,{group:`${c.name}-${v}`,id:`${c.name}-${v}-${w.value}`,key:w.label,label:w.label,checked:b[v]===w.value,action:()=>{b[v]=w.value,S.restartNeeded&&Ue("Restart to apply the change")}}))));break;case 5:if(S.stickToMarkers||S.componentProps)continue;u.push(r(C.MenuControlItem,{...y,control:(w,I)=>r(C.MenuSliderControl,{ref:I,...w,minValue:S.markers[0],maxValue:S.markers.at(-1),value:b[v],onChange:T=>b[v]=T})}));break}}let f=u.length>0;return!f&&!(e&&d)?null:r(C.MenuItem,{id:`${c.name}-menu`,key:c.name,label:c.name,action:()=>Tr(c)},f&&r(p,null,r(C.MenuGroup,{label:c.name},u),r(C.MenuSeparator,null),r(C.MenuItem,{id:`${c.name}-open`,label:"Open Settings",action:()=>Tr(c)})))}))}function $k(){return r(C.MenuItem,{id:"themes",label:"Themes",action:()=>En(Ds)},Ev())}function Ev(){let{useQuickCss:e,enabledThemes:t}=Re(["useQuickCss","enabledThemes"]),[o]=lt(vegordMod.themes.getThemesList);return r(p,null,r(C.MenuCheckboxItem,{id:"toggle-quickcss",checked:e,label:"Enable QuickCSS",action:()=>{de.useQuickCss=!e}}),r(C.MenuItem,{id:"edit-quickcss",label:"Edit QuickCSS",action:()=>vegordMod.quickCss.openEditor()}),r(C.MenuItem,{id:"manage-themes",label:"Manage Themes",action:()=>En(Ds)}),!!o?.length&&r(C.MenuGroup,null,o.map(n=>r(C.MenuCheckboxItem,{id:`theme-${n.fileName}`,key:n.fileName,label:n.name,checked:t.includes(n.fileName),action:()=>{t.includes(n.fileName)?de.enabledThemes=t.filter(i=>i!==n.fileName):de.enabledThemes=[...t,n.fileName]}}))))}function Gk(){let e=[];for(let o of Object.values(qe))if(o.toolboxActions&&Ie(o.name)){let n=typeof o.toolboxActions=="function"?o.toolboxActions():Object.entries(o.toolboxActions).map(([i,s])=>{let a=`${o.name}-${i}`;return r(C.MenuItem,{id:a,key:a,label:i,action:s})});if(!n||Array.isArray(n)&&n.length===0)continue;e.push({plugin:o,node:r(C.MenuGroup,{label:o.name,key:`${o.name}-group`},n)})}if(e.length<=5)return e.map(o=>o.node);let t=e.map(({node:o,plugin:n})=>r(C.MenuItem,{id:`${n.name}-menu`,key:`${n.name}-menu`,label:n.name,action:()=>Tr(n)},o));return r(C.MenuGroup,null,t)}function f4(e){return r(C.Menu,{navId:"vc-toolbox",onClose:e},r(C.MenuItem,{id:"vegord-donate",label:r("span",{style:{color:"#8B5CF6",backgroundColor:"#1a1a2e",textAlign:"center",display:"flex",justifyContent:"center",width:"100%",borderRadius:"6px",padding:"4px 8px"}},"Donate"),icon:Uk,action:()=>window.open("https://vergoboy.ir/donate","_blank")}),r(C.MenuItem,{id:"notifications",label:"Open Notification Log",action:_a}),Fk(),$k(),Bk(),Gk())}N();ge();ue();pe();H();x();l();(window.vegordStyles??=new Map).set("src/plugins/betterSettings/fullHeightContext.css",{name:"src/plugins/betterSettings/fullHeightContext.css",source:`/*
  * Discord has dumb max height logic for their context menus.
  * If a context menu is at the bottom of the screen, its submenus are capped to its max height and can't even grow upwards
