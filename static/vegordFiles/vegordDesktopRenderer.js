@@ -167,11 +167,16 @@ code, pre, .hljs {
 }
 /* ==UserStyle==
 @name         Bubble Theme (Vegord)
-@description  Telegram-style message bubbles for Discord/Vegord — v6.
-@version      6.0.0
+@description  Telegram-style message bubbles for Discord/Vegord — v7.
+@version      7.0.0
 ==/UserStyle== */
 
 /*
+  v7 — reply chip merged into the bubble:
+    - the quoted-reply chip now shares the bubble's exact background and
+      continuous corner radii, so chip + name bar + text read as ONE bubble
+      (previously the darker chip read as a separate bar above the bubble)
+    - chip top corners still follow vc-tg-* group grouping
   v6 — rebuilt against the real message-list DOM:
     - everything scoped to [data-list-id="chat-messages"]
     - bubbles targeted via "contents > messageContent" so the quoted
@@ -303,15 +308,16 @@ code, pre, .hljs {
 }
 
 /* ==========================================================================
-   REPLY QUOTE — dark chip, native gold spine removed; quoted text is NOT a
-   bubble (it is scoped out by the "contents > messageContent" selector)
+   REPLY QUOTE — merged INTO the bubble: same background and continuous
+   corner radii, so the whole message is one bubble. The quoted text is
+   NOT a bubble (scoped out by the "contents > messageContent" selector).
    ========================================================================== */
 
 [data-list-id="chat-messages"] [id^="message-reply-context-"],
 [data-list-id="chat-messages"] [class*="repliedMessage"] {
   display: block !important;
   border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
-  padding: 5px 10px !important;
+  padding: 5px 10px 4px !important;
   margin: 0 !important;
   font-size: 12px !important;
   direction: ltr !important;
@@ -322,8 +328,14 @@ code, pre, .hljs {
   border-left: none !important;
   box-shadow: none !important;
 }
-[data-list-id="chat-messages"] li:not(.vc-own-message) [id^="message-reply-context-"] { background: var(--bt-in-bg-dark) !important; color: var(--bt-in-text) !important; }
-[data-list-id="chat-messages"] li.vc-own-message [id^="message-reply-context-"] { background: var(--bt-out-bg-dark) !important; color: var(--bt-out-text) !important; }
+/* same background as the bubble itself — one continuous bubble */
+[data-list-id="chat-messages"] li:not(.vc-own-message) [id^="message-reply-context-"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
+[data-list-id="chat-messages"] li.vc-own-message [id^="message-reply-context-"] { background: var(--bt-out-bg) !important; color: var(--bt-out-text) !important; }
+/* chip top corners follow group grouping like the bubble does */
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid [id^="message-reply-context-"],
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last [id^="message-reply-context-"] { border-top-left-radius: var(--bt-radius-tight) !important; }
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid [id^="message-reply-context-"],
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [id^="message-reply-context-"] { border-top-right-radius: var(--bt-radius-tight) !important; }
 [data-list-id="chat-messages"] [class*="repliedMessageClickableSpine"] { display: none !important; }
 [data-list-id="chat-messages"] [id^="message-reply-context-"] img[class*="replyAvatar"] { width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-inline-end: 4px; }
 [data-list-id="chat-messages"] [id^="message-reply-context-"] span[class*="username"] { color: var(--bt-accent) !important; font-weight: 600; }
