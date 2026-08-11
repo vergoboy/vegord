@@ -167,33 +167,24 @@ code, pre, .hljs {
 }
 /* ==UserStyle==
 @name         Bubble Theme (Vegord)
-@description  Telegram-style message bubbles for Discord/Vegord — v4.
-@version      4.0.0
+@description  Telegram-style message bubbles for Discord/Vegord — v5.
+@version      5.0.0
 ==/UserStyle== */
 
 /*
-  READ THIS FIRST — I think we've hit the limit of guessing blind
-  ---------------------------------------------------------------------------
-  Looking at your last screenshot: the reply box still has Discord's native
-  gold spine/tan background (my dark "reply chip" rules never applied at
-  all), and your own name+tag is still fully visible and overlapping the
-  time (my hiding rules never applied either). That's not a small styling
-  miss — it means the SELECTORS themselves aren't matching real elements in
-  your build, most likely because the actual class names in your version of
-  Vegord/Discord are different from the ones I extracted from the HTML you
-  pasted several messages ago (Discord's hashed class suffixes are
-  per-build and can drift, and I have no way to see your live DOM to verify).
+  v5 — palette rebuilt from the Telegram-FOSS night theme
+  (TMessagesProj/src/main/assets/night.attheme):
 
-  This version adds broader fallback selectors and '!important' everywhere
-  it plausibly helps, but honestly — the fastest way to actually fix this
-  now is for you to open DevTools in Vegord (Ctrl+Shift+I), click the
-  inspect-element cursor (top-left of the DevTools panel), click directly
-  on: (1) your own message bubble, (2) the reply box, and send me a
-  screenshot of the "Elements" panel each time. That gives me the REAL
-  class names instead of guesses, and I can point every rule at them
-  exactly — one round instead of another five.
-
-  Everything below is still a genuine best-effort pass in the meantime.
+      chat_outBubble        #366caf   (own bubbles)
+      chat_outBubbleSelected#4b7daf
+      chat_inBubble         #1f2123   (incoming bubbles)
+      chat_inBubbleSelected #314a61
+      chat_wallpaper        #0f0f10
+      chat_outBubbleText    #ffffff
+      chat_messageLinkOut   #aedfff
+      chat_messageLinkIn    #79c4fc
+      chat_attachActiveTab  #6abfff   (accent)
+      chat_serviceBackground#373737
 */
 
 /* ==========================================================================
@@ -205,14 +196,14 @@ code, pre, .hljs {
   --bt-radius-tight: 4px;
   --bt-max-w: 400px;
   --bt-gutter: 38px;
-  --bt-out-bg: #4a3fc4;
-  --bt-out-bg-dark: #342c8f;
-  --bt-out-text: #f2f1ff;
-  --bt-in-bg: #2b2d3a;
-  --bt-in-bg-dark: #1c1d27;
-  --bt-in-text: #e7e8f0;
-  --bt-accent: #5865f2;
-  --bt-accent-soft: rgba(88,101,242,.18);
+  --bt-out-bg: #366caf;
+  --bt-out-bg-dark: #2e5a93;
+  --bt-out-text: #ffffff;
+  --bt-in-bg: #1f2123;
+  --bt-in-bg-dark: #161718;
+  --bt-in-text: #ffffff;
+  --bt-accent: #6abfff;
+  --bt-accent-soft: rgba(106,191,255,.18);
 }
 
 /* ==========================================================================
@@ -329,6 +320,7 @@ li.vc-own-message [class*="header_"] {
 li.vc-own-message span[class*="username_"],
 li.vc-own-message [class*="headerText_"] { display: none !important; }
 span[class*="username_"] { font-weight: 700 !important; font-size: 12.5px !important; }
+li:not(.vc-own-message) span[class*="username_"] { color: #79c4fc !important; }
 
 li[class*="hasReply_"] h3[class*="header_"] { border-radius: 0 !important; }
 
