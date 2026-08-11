@@ -167,28 +167,27 @@ code, pre, .hljs {
 }
 /* ==UserStyle==
 @name         Bubble Theme (Vegord)
-@description  Telegram-style message bubbles for Discord/Vegord — v8.
-@version      8.0.0
+@description  Telegram-style message bubbles for Discord/Vegord — v9.
+@version      9.0.0
 ==/UserStyle== */
 
 /*
-  v8 — hover action bar follows the bubble side:
-    - incoming (left) messages show the reaction/action bar on the LEFT
-    - own (right) messages keep it on the RIGHT
-  v7 — reply chip merged into the bubble:
-    - the quoted-reply chip now shares the bubble's exact background and
-      continuous corner radii, so chip + name bar + text read as ONE bubble
-      (previously the darker chip read as a separate bar above the bubble)
-    - chip top corners still follow vc-tg-* group grouping
-  v6 — rebuilt against the real message-list DOM:
-    - everything scoped to [data-list-id="chat-messages"]
-    - bubbles targeted via "contents > messageContent" so the quoted
-      text inside reply chips (which also carries id^="message-content-")
-      is never styled as a bubble again
-    - own-message name header fully clipped (no more leaked username
-      overlapping the timestamp)
-    - forced direction:rtl removed — Discord already emits markupRtl
-      per message, and the leading bidi block handles the rest
+  v9 — Telegram-accurate bubble shape, header and timestamp:
+    - bubbles shrink to hug their text (table shrink-to-fit, no width:100%)
+    - incoming name sits ABOVE the bubble beside the avatar (transparent
+      header); reply messages keep the name strip inside the merged bubble
+    - reply-message avatar hidden so it never overlaps the bubble
+    - group corners follow Telegram: the bubble-side corners go square when
+      messages are stacked and round at the group edges; the tail (rotated
+      square) sits on the LAST message of a group
+    - tail actually visible: messageContent gets its own stacking context
+      (position:relative + z-index:0) so the ::after z-index:-1 shows
+      instead of being painted under the whole bubble
+    - timestamp bottom-right inside the bubble (bottom padding reserved)
+  v8 — hover action bar follows the bubble side.
+  v7 — reply chip merged into the bubble.
+  v6 — rebuilt against the real message-list DOM (scoped to
+       [data-list-id="chat-messages"], quoted text never a bubble).
   Palette: Telegram-FOSS night.attheme (out #366caf / in #1f2123 / #6abfff)
 */
 
@@ -198,18 +197,16 @@ code, pre, .hljs {
   --bt-max-w: 400px;
   --bt-gutter: 38px;
   --bt-out-bg: #366caf;
-  --bt-out-bg-dark: #2e5a93;
   --bt-out-text: #ffffff;
   --bt-in-bg: #1f2123;
-  --bt-in-bg-dark: #161718;
   --bt-in-text: #ffffff;
   --bt-accent: #6abfff;
   --bt-accent-soft: rgba(106,191,255,.18);
 }
 
 /* ==========================================================================
-   ROW — Telegram bubbles shrink to content and hug one side. A table is the
-   most reliable "all children share the resolved width" primitive.
+   ROW — table shrink-wraps the text so bubbles hug content. All children
+   (chip / contents / accessories) share the resolved width.
    ========================================================================== */
 
 [data-list-id="chat-messages"] [class*="cozyMessage"] {
@@ -222,16 +219,17 @@ code, pre, .hljs {
 
 [data-list-id="chat-messages"] [class*="contents_"] {
   display: block !important;
-  width: 100% !important;
   position: relative !important;
 }
 
 /* ==========================================================================
-   AVATAR — own avatars hidden (Telegram), incoming float left
+   AVATAR — own + reply-message avatars hidden; incoming float left
    ========================================================================== */
 
 [data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] img[class*="avatar_"],
 [data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > img[class*="avatar"] { display: none !important; }
+[data-list-id="chat-messages"] [id^="message-reply-context-"] + [class*="contents_"] img[class*="avatar_"],
+[data-list-id="chat-messages"] [id^="message-reply-context-"] + [class*="contents_"] > img[class*="avatar"] { display: none !important; }
 [data-list-id="chat-messages"] img[class*="avatarDecoration"] { display: none !important; }
 [data-list-id="chat-messages"] [class*="contents_"] > img[class*="avatar"] {
   float: left; width: 30px; height: 30px; border-radius: 11px; margin: 2px 8px 0 0;
@@ -240,43 +238,50 @@ code, pre, .hljs {
 [data-list-id="chat-messages"] li.vc-own-message span[class*="timestamp_"][class*="alt_"] { display: none !important; }
 
 /* ==========================================================================
-   HEADER (name bar) — incoming only; own messages get it clipped to zero
+   HEADER (name bar) — transparent ABOVE the bubble for plain incoming
+   messages; own headers clipped; reply messages keep it inside the bubble
    ========================================================================== */
 
 [data-list-id="chat-messages"] [class*="contents_"] > h3[class*="header_"] {
   direction: ltr !important;
   display: block !important;
-  width: 100% !important;
-  font-size: 12px !important;
-  margin: 0 !important;
-  padding: 5px 10px 2px !important;
-  border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
-}
-[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > h3[class*="header_"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
-[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > h3[class*="header_"] span[class*="username"] { color: #79c4fc !important; }
-
-[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > h3[class*="header_"] {
-  height: 0 !important;
-  padding: 0 !important;
-  margin: 0 !important;
   background: transparent !important;
-  overflow: hidden !important;
-  border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 2px 0 4px !important;
+  font-size: 12px !important;
+  line-height: 18px;
 }
-[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > h3[class*="header_"] > span[class*="headerText"] { display: none !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > h3[class*="header_"] span[class*="username"] { color: #79c4fc !important; font-weight: 600; }
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > h3[class*="header_"] { height: 0 !important; overflow: hidden !important; margin: 0 !important; }
+[data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > h3[class*="header_"] > span { display: none !important; }
 
-/* bubble is flush under its name bar (and flush under the reply chip) */
-[data-list-id="chat-messages"] [class*="contents_"] > h3[class*="header_"] + [class*="messageContent"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
-[data-list-id="chat-messages"] [id^="message-reply-context-"] + [class*="contents_"] > h3[class*="header_"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
+/* reply messages: name strip becomes the top of the merged bubble */
+[data-list-id="chat-messages"] [id^="message-reply-context-"] + [class*="contents_"] > h3[class*="header_"] {
+  background: var(--bt-in-bg) !important;
+  border-radius: 0 !important;
+  padding: 2px 10px 2px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  line-height: 18px;
+}
+[data-list-id="chat-messages"] li.vc-own-message [id^="message-reply-context-"] + [class*="contents_"] > h3[class*="header_"] {
+  height: 0 !important; padding: 0 !important; margin: 0 !important;
+  overflow: hidden !important; background: transparent !important;
+}
+[data-list-id="chat-messages"] li.vc-own-message [id^="message-reply-context-"] + [class*="contents_"] > h3[class*="header_"] > span { display: none !important; }
 
 /* ==========================================================================
-   BUBBLE
+   BUBBLE — message text. position:relative + z-index:0 gives it a stacking
+   context so the tail (z-index:-1) shows behind the bubble background.
    ========================================================================== */
 
 [data-list-id="chat-messages"] [class*="contents_"] > [class*="messageContent"] {
   display: block !important;
   clear: both;
-  padding: 7px 10px 6px !important;
+  position: relative !important;
+  z-index: 0;
+  padding: 7px 10px 18px !important;
   filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.3));
   border-radius: var(--bt-radius) !important;
   box-sizing: border-box !important;
@@ -284,36 +289,40 @@ code, pre, .hljs {
 [data-list-id="chat-messages"] li:not(.vc-own-message) [class*="contents_"] > [class*="messageContent"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
 [data-list-id="chat-messages"] li.vc-own-message [class*="contents_"] > [class*="messageContent"] { background: var(--bt-out-bg) !important; color: var(--bt-out-text) !important; }
 
-/* grouping corners — Telegram: the bubble next to the previous one hugs tight */
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-first [class*="contents_"] > [class*="messageContent"],
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-only  [class*="contents_"] > [class*="messageContent"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid   [class*="contents_"] > [class*="messageContent"],
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last  [class*="contents_"] > [class*="messageContent"] { border-top-left-radius: var(--bt-radius-tight) !important; }
-[data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid  [class*="contents_"] > [class*="messageContent"],
-[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [class*="contents_"] > [class*="messageContent"] { border-top-right-radius: var(--bt-radius-tight) !important; }
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-first [class*="contents_"] > [class*="messageContent"],
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid   [class*="contents_"] > [class*="messageContent"] { border-bottom-left-radius: var(--bt-radius-tight) !important; }
-[data-list-id="chat-messages"] li.vc-own-message.vc-tg-first [class*="contents_"] > [class*="messageContent"],
-[data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid   [class*="contents_"] > [class*="messageContent"] { border-bottom-right-radius: var(--bt-radius-tight) !important; }
+/* content sits flush under the reply name strip */
+[data-list-id="chat-messages"] [id^="message-reply-context-"] + [class*="contents_"] > h3[class*="header_"] + [class*="messageContent"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
 
-/* tail corner for the last bubble of a group */
+/* ==========================================================================
+   GROUP CORNERS — Telegram: the bubble-side corner is square where messages
+   are stacked, rounded at the group edges. Incoming bubble-side = left,
+   own bubble-side = right. Tail goes on the LAST (and only) message.
+   ========================================================================== */
+
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-first [class*="contents_"] > [class*="messageContent"] { border-bottom-left-radius: 0 !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid   [class*="contents_"] > [class*="messageContent"] { border-top-left-radius: 0 !important; border-bottom-left-radius: 0 !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last  [class*="contents_"] > [class*="messageContent"] { border-top-left-radius: 0 !important; }
+
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-first [class*="contents_"] > [class*="messageContent"] { border-bottom-right-radius: 0 !important; }
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid   [class*="contents_"] > [class*="messageContent"] { border-top-right-radius: 0 !important; border-bottom-right-radius: 0 !important; }
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last  [class*="contents_"] > [class*="messageContent"] { border-top-right-radius: 0 !important; }
+
 [data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last [class*="contents_"] > [class*="messageContent"]::after,
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-only  [class*="contents_"] > [class*="messageContent"]::after {
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-only [class*="contents_"] > [class*="messageContent"]::after {
   content: ""; position: absolute; z-index: -1; bottom: 3px; left: -6px;
   width: 14px; height: 14px; border-radius: 4px; transform: rotate(45deg);
   background: var(--bt-in-bg);
 }
 [data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [class*="contents_"] > [class*="messageContent"]::after,
-[data-list-id="chat-messages"] li.vc-own-message.vc-tg-only  [class*="contents_"] > [class*="messageContent"]::after {
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-only [class*="contents_"] > [class*="messageContent"]::after {
   content: ""; position: absolute; z-index: -1; bottom: 3px; right: -6px;
   width: 14px; height: 14px; border-radius: 4px; transform: rotate(45deg);
   background: var(--bt-out-bg);
 }
 
 /* ==========================================================================
-   REPLY QUOTE — merged INTO the bubble: same background and continuous
-   corner radii, so the whole message is one bubble. The quoted text is
-   NOT a bubble (scoped out by the "contents > messageContent" selector).
+   REPLY CHIP — the top of the merged bubble (same background, continuous
+   radii); top corners follow group grouping; gold spine removed; quoted
+   text is NOT a bubble (scoped out by the contents > messageContent rule)
    ========================================================================== */
 
 [data-list-id="chat-messages"] [id^="message-reply-context-"],
@@ -331,14 +340,12 @@ code, pre, .hljs {
   border-left: none !important;
   box-shadow: none !important;
 }
-/* same background as the bubble itself — one continuous bubble */
 [data-list-id="chat-messages"] li:not(.vc-own-message) [id^="message-reply-context-"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
 [data-list-id="chat-messages"] li.vc-own-message [id^="message-reply-context-"] { background: var(--bt-out-bg) !important; color: var(--bt-out-text) !important; }
-/* chip top corners follow group grouping like the bubble does */
 [data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-mid [id^="message-reply-context-"],
-[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last [id^="message-reply-context-"] { border-top-left-radius: var(--bt-radius-tight) !important; }
+[data-list-id="chat-messages"] li:not(.vc-own-message).vc-tg-last [id^="message-reply-context-"] { border-top-left-radius: 0 !important; }
 [data-list-id="chat-messages"] li.vc-own-message.vc-tg-mid [id^="message-reply-context-"],
-[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [id^="message-reply-context-"] { border-top-right-radius: var(--bt-radius-tight) !important; }
+[data-list-id="chat-messages"] li.vc-own-message.vc-tg-last [id^="message-reply-context-"] { border-top-right-radius: 0 !important; }
 [data-list-id="chat-messages"] [class*="repliedMessageClickableSpine"] { display: none !important; }
 [data-list-id="chat-messages"] [id^="message-reply-context-"] img[class*="replyAvatar"] { width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-inline-end: 4px; }
 [data-list-id="chat-messages"] [id^="message-reply-context-"] span[class*="username"] { color: var(--bt-accent) !important; font-weight: 600; }
@@ -353,7 +360,7 @@ code, pre, .hljs {
 [data-list-id="chat-messages"] li[class*="mentioned"] [class*="contents_"] > [class*="messageContent"] { box-shadow: inset 0 0 0 1.5px var(--bt-accent) !important; }
 
 /* ==========================================================================
-   TIMESTAMP — bottom-right inside the bubble
+   TIMESTAMP — bottom-right inside the bubble (bottom padding reserved)
    ========================================================================== */
 
 [data-list-id="chat-messages"] span[class*="timestampInline"] {
