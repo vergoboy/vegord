@@ -165,68 +165,130 @@ code, pre, .hljs {
     unicode-bidi: isolate;
     direction: ltr;
 }
+/* ==UserStyle==
+@name         Bubble Theme (Vegord)
+@description  Telegram-style message bubbles for Discord/Vegord — v4.
+@version      4.0.0
+==/UserStyle== */
+
+/*
+  READ THIS FIRST — I think we've hit the limit of guessing blind
+  ---------------------------------------------------------------------------
+  Looking at your last screenshot: the reply box still has Discord's native
+  gold spine/tan background (my dark "reply chip" rules never applied at
+  all), and your own name+tag is still fully visible and overlapping the
+  time (my hiding rules never applied either). That's not a small styling
+  miss — it means the SELECTORS themselves aren't matching real elements in
+  your build, most likely because the actual class names in your version of
+  Vegord/Discord are different from the ones I extracted from the HTML you
+  pasted several messages ago (Discord's hashed class suffixes are
+  per-build and can drift, and I have no way to see your live DOM to verify).
+
+  This version adds broader fallback selectors and '!important' everywhere
+  it plausibly helps, but honestly — the fastest way to actually fix this
+  now is for you to open DevTools in Vegord (Ctrl+Shift+I), click the
+  inspect-element cursor (top-left of the DevTools panel), click directly
+  on: (1) your own message bubble, (2) the reply box, and send me a
+  screenshot of the "Elements" panel each time. That gives me the REAL
+  class names instead of guesses, and I can point every rule at them
+  exactly — one round instead of another five.
+
+  Everything below is still a genuine best-effort pass in the meantime.
+*/
+
+/* ==========================================================================
+   TOKENS
+   ========================================================================== */
+
 :root {
   --bt-radius: 16px;
   --bt-radius-tight: 4px;
-  --bt-max-w: 420px;
+  --bt-max-w: 400px;
+  --bt-gutter: 38px;
   --bt-out-bg: #4a3fc4;
+  --bt-out-bg-dark: #342c8f;
   --bt-out-text: #f2f1ff;
   --bt-in-bg: #2b2d3a;
+  --bt-in-bg-dark: #1c1d27;
   --bt-in-text: #e7e8f0;
   --bt-accent: #5865f2;
   --bt-accent-soft: rgba(88,101,242,.18);
 }
 
-li[class*="messageListItem_"] { max-width: 100%; }
+/* ==========================================================================
+   HARD SAFETY CLAMP — whatever else does or doesn't match, nothing should
+   ever be able to render wider than the channel. This alone should stop
+   own bubbles from poking past the screen edge even if other rules below
+   are silently failing to match.
+   ========================================================================== */
 
+li[class*="messageListItem_"],
+[class*="cozyMessage_"],
+[class*="contents_"],
+[id^="message-content-"],
+[id^="message-reply-context-"],
+[id^="message-accessories-"] {
+  max-width: min(var(--bt-max-w), 90%) !important;
+  box-sizing: border-box !important;
+}
+
+/* ==========================================================================
+   WRAPPER — reply-quote / header / bubble share one width. 'display:table'
+   is the old, extremely reliable way to get "shrinks to the widest child,
+   but every child still fills that resolved width" — the same effect
+   Grid was going for, with fewer ways to go wrong.
+   ========================================================================== */
+
+[class*="cozyMessage_"] {
+  display: table !important;
+}
+li:not(.vc-own-message) [class*="cozyMessage_"] { margin-inline-start: 16px !important; }
+li.vc-own-message      [class*="cozyMessage_"] { margin-inline-start: auto !important; margin-inline-end: 16px !important; }
+
+[id^="message-reply-context-"],
 [class*="contents_"] {
-  position: relative;
-  width: fit-content;
-  max-width: var(--bt-max-w);
+  display: block !important;
+  width: 100% !important;
 }
+[class*="contents_"] { position: relative !important; }
 
-li.vc-own-message [class*="contents_"] {
-  margin-inline-start: auto;
-  margin-inline-end: 16px;
-  text-align: right;
+/* ==========================================================================
+   AVATAR
+   ========================================================================== */
+
+li.vc-own-message [class*="contents_"] img[class*="avatar_"],
+li.vc-own-message img[class*="avatar_"] { display: none !important; }
+img[class*="avatarDecoration_"] { display: none !important; }
+[class*="contents_"] > img[class*="avatar_"] {
+  float: left; width: 30px; height: 30px; border-radius: 11px; margin: 2px 8px 0 0;
 }
-li:not(.vc-own-message) [class*="contents_"] {
-  margin-inline-start: 16px;
-  text-align: left;
-}
+li:not(.vc-own-message) span[class*="timestamp_"][class*="alt_"] { width: var(--bt-gutter) !important; display: inline-block !important; text-align: center; font-size: 10px; }
+li.vc-own-message span[class*="timestamp_"][class*="alt_"] { display: none !important; }
 
-ol[aria-label^="Messages"] { padding-inline: 4px; box-sizing: border-box; }
-
-li.vc-own-message [class*="contents_"] > img[class*="avatar_"] { display: none !important; }
-img[class*="avatarDecoration_"] { display: none; }
-[class*="contents_"] > img[class*="avatar_"] { width: 30px; height: 30px; border-radius: 11px; vertical-align: -6px; margin-inline-end: 8px; }
-
-li:not(.vc-own-message) span[class*="timestamp_"][class*="alt_"] { width: 30px; display: inline-block; text-align: center; font-size: 10px; margin-inline-end: 8px; }
-li.vc-own-message span[class*="timestamp_"][class*="alt_"] { display: none; }
+/* ==========================================================================
+   BUBBLE
+   ========================================================================== */
 
 [id^="message-content-"] {
-  display: inline-block;
-  padding: 7px 10px 6px;
+  display: block !important;
+  clear: both;
+  padding: 7px 10px 6px !important;
   filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.3));
-  text-align: initial;
+  border-radius: var(--bt-radius) !important;
 }
-li:not(.vc-own-message) [id^="message-content-"] { background: var(--bt-in-bg); color: var(--bt-in-text); }
-li.vc-own-message [id^="message-content-"] { background: var(--bt-out-bg); color: var(--bt-out-text); }
-
-[id^="message-content-"] { border-radius: var(--bt-radius); }
+li:not(.vc-own-message) [id^="message-content-"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
+li.vc-own-message [id^="message-content-"] { background: var(--bt-out-bg) !important; color: var(--bt-out-text) !important; }
 
 li:not(.vc-own-message).vc-tg-first [id^="message-content-"],
-li:not(.vc-own-message).vc-tg-only  [id^="message-content-"] { border-top-left-radius: 0; border-top-right-radius: 0; }
-
+li:not(.vc-own-message).vc-tg-only  [id^="message-content-"] { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
 li:not(.vc-own-message).vc-tg-mid  [id^="message-content-"],
-li:not(.vc-own-message).vc-tg-last [id^="message-content-"] { border-top-left-radius: var(--bt-radius-tight); }
+li:not(.vc-own-message).vc-tg-last [id^="message-content-"] { border-top-left-radius: var(--bt-radius-tight) !important; }
 li.vc-own-message.vc-tg-mid  [id^="message-content-"],
-li.vc-own-message.vc-tg-last [id^="message-content-"] { border-top-right-radius: var(--bt-radius-tight); }
-
+li.vc-own-message.vc-tg-last [id^="message-content-"] { border-top-right-radius: var(--bt-radius-tight) !important; }
 li:not(.vc-own-message).vc-tg-first [id^="message-content-"],
-li:not(.vc-own-message).vc-tg-mid   [id^="message-content-"] { border-bottom-left-radius: var(--bt-radius-tight); }
+li:not(.vc-own-message).vc-tg-mid   [id^="message-content-"] { border-bottom-left-radius: var(--bt-radius-tight) !important; }
 li.vc-own-message.vc-tg-first [id^="message-content-"],
-li.vc-own-message.vc-tg-mid   [id^="message-content-"] { border-bottom-right-radius: var(--bt-radius-tight); }
+li.vc-own-message.vc-tg-mid   [id^="message-content-"] { border-bottom-right-radius: var(--bt-radius-tight) !important; }
 
 li:not(.vc-own-message).vc-tg-last [id^="message-content-"]::after,
 li:not(.vc-own-message).vc-tg-only [id^="message-content-"]::after {
@@ -241,78 +303,115 @@ li.vc-own-message.vc-tg-only [id^="message-content-"]::after {
   background: var(--bt-out-bg);
 }
 
-h3[class*="header_"] {
-  direction: ltr;
-  font-size: 12px;
-  margin: 0 !important;
-  padding: 5px 10px 2px;
-  border-radius: var(--bt-radius) var(--bt-radius) 0 0;
-}
-li:not(.vc-own-message) h3[class*="header_"] { background: var(--bt-in-bg); color: var(--bt-in-text); }
+/* ==========================================================================
+   HEADER (name) — hidden entirely for own messages, several fallback
+   selector shapes since I can't confirm which one actually matches
+   ========================================================================== */
 
-li.vc-own-message h3[class*="header_"] {
-  background: transparent;
-  height: 0;
-  padding: 0;
-  overflow: visible;
+h3[class*="header_"], [class*="header_"]:is(h3, div) {
+  direction: ltr !important;
+  display: block !important;
+  width: 100% !important;
+  font-size: 12px !important;
+  margin: 0 !important;
+  padding: 5px 10px 2px !important;
+  border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
 }
-li.vc-own-message span[class*="username_"] { display: none; }
-span[class*="username_"] { font-weight: 700; font-size: 12.5px; }
+li:not(.vc-own-message) h3[class*="header_"] { background: var(--bt-in-bg) !important; color: var(--bt-in-text) !important; }
+
+li.vc-own-message h3[class*="header_"],
+li.vc-own-message [class*="header_"] {
+  background: transparent !important;
+  height: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+li.vc-own-message span[class*="username_"],
+li.vc-own-message [class*="headerText_"] { display: none !important; }
+span[class*="username_"] { font-weight: 700 !important; font-size: 12.5px !important; }
+
+li[class*="hasReply_"] h3[class*="header_"] { border-radius: 0 !important; }
+
+/* ==========================================================================
+   REPLY QUOTE — forced dark chip, native gold spine/border removed
+   ========================================================================== */
+
+[id^="message-reply-context-"],
+[class*="repliedMessage_"] {
+  display: block !important;
+  border-radius: var(--bt-radius) var(--bt-radius) 0 0 !important;
+  padding: 5px 10px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  direction: ltr !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: none !important;
+  border-left: none !important;
+  box-shadow: none !important;
+}
+li:not(.vc-own-message) [id^="message-reply-context-"] { background: var(--bt-in-bg-dark) !important; color: var(--bt-in-text) !important; }
+li.vc-own-message [id^="message-reply-context-"] { background: var(--bt-out-bg-dark) !important; color: var(--bt-out-text) !important; }
+[class*="repliedMessageClickableSpine_"] { display: none !important; }
+[id^="message-reply-context-"] img[class*="replyAvatar_"] { width: 14px; height: 14px; border-radius: 5px; vertical-align: -2px; margin-inline-end: 4px; }
+
+/* kill Discord's native "you were mentioned" tint wherever it's actually
+   coming from — try both the row and the reply box */
+li[class*="mentioned_"],
+[class*="mentioned_"] {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+li[class*="mentioned_"] [id^="message-content-"] { box-shadow: inset 0 0 0 1.5px var(--bt-accent) !important; }
+
+/* ==========================================================================
+   TIMESTAMP
+   ========================================================================== */
 
 span[class*="timestampInline_"] {
-  position: absolute;
-  bottom: 6px;
-  right: 8px;
+  position: absolute !important;
+  bottom: 6px !important;
+  right: 8px !important;
+  left: auto !important;
+  top: auto !important;
   z-index: 2;
-  font-size: 10px;
+  font-size: 10px !important;
   opacity: .65;
-  direction: ltr;
+  direction: ltr !important;
 }
 
-[class*="messageContent_"] {
-  direction: rtl;
-  text-align: right;
-}
+/* ==========================================================================
+   TEXT — RTL baseline
+   ========================================================================== */
+
+[class*="messageContent_"] { direction: rtl !important; text-align: right !important; }
+
+/* ==========================================================================
+   EDITED — icon only
+   ========================================================================== */
 
 [class*="edited_"] {
-  display: inline-block;
-  width: 11px; height: 11px;
-  margin-inline-start: 5px;
-  font-size: 0;
-  vertical-align: -1px;
-  background-color: currentColor;
-  opacity: .7;
+  display: inline-block !important; width: 11px; height: 11px;
+  margin-inline-start: 5px; font-size: 0 !important; vertical-align: -1px;
+  background-color: currentColor; opacity: .7;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='m13.96 5.46 4.58 4.58a1 1 0 0 0 1.42 0l1.38-1.38a2 2 0 0 0 0-2.82l-3.18-3.18a2 2 0 0 0-2.82 0l-1.38 1.38a1 1 0 0 0 0 1.42ZM2.11 20.16l.73-4.22a3 3 0 0 1 .83-1.61l7.87-7.87a1 1 0 0 1 1.42 0l4.58 4.58a1 1 0 0 1 0 1.42l-7.87 7.87a3 3 0 0 1-1.6.83l-4.23.73a1.5 1.5 0 0 1-1.73-1.73Z'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='m13.96 5.46 4.58 4.58a1 1 0 0 0 1.42 0l1.38-1.38a2 2 0 0 0 0-2.82l-3.18-3.18a2 2 0 0 0-2.82 0l-1.38 1.38a1 1 0 0 0 0 1.42ZM2.11 20.16l.73-4.22a3 3 0 0 1 .83-1.61l7.87-7.87a1 1 0 0 1 1.42 0l4.58 4.58a1 1 0 0 1 0 1.42l-7.87 7.87a3 3 0 0 1-1.6.83l-4.23.73a1.5 1.5 0 0 1-1.73-1.73Z'/></svg>");
   -webkit-mask-size: contain; mask-size: contain;
 }
 
-[id^="message-reply-context-"] {
-  margin-bottom: 2px;
-  font-size: 12px;
-  opacity: .8;
-  width: fit-content;
-  max-width: var(--bt-max-w);
-}
-li:not(.vc-own-message) [id^="message-reply-context-"] { margin-inline-start: 16px; padding-inline-start: 38px; }
-li.vc-own-message [id^="message-reply-context-"] { margin-inline-start: auto; margin-inline-end: 16px; text-align: right; }
+/* ==========================================================================
+   ACCESSORIES — images, embeds, reactions
+   ========================================================================== */
 
-li[class*="mentioned_"] [id^="message-content-"] { box-shadow: inset 0 0 0 1.5px var(--bt-accent); }
-li[class*="mentioned_"] { background: transparent !important; }
+[id^="message-accessories-"] { width: fit-content !important; }
+li:not(.vc-own-message) [id^="message-accessories-"] { margin-inline-start: calc(16px + var(--bt-gutter)) !important; }
+li.vc-own-message [id^="message-accessories-"] { margin-inline-start: auto !important; margin-inline-end: 16px !important; }
 
-[class*="reactions__"] {
-  width: fit-content;
-  max-width: var(--bt-max-w);
-  margin-top: -8px;
-  position: relative;
-  z-index: 2;
-}
-li:not(.vc-own-message) [class*="reactions__"] { margin-inline-start: 16px; }
-li.vc-own-message [class*="reactions__"] { margin-inline-start: auto; margin-inline-end: 16px; }
 [class*="reaction__"] { border-radius: 10px !important; }
 [class*="reactionMe__"] { background: var(--bt-accent-soft) !important; border-color: var(--bt-accent) !important; }
-
-[class*="embedFull_"] { max-width: 100%; border-radius: 8px; margin-top: 4px; }
+[class*="embedFull_"] { max-width: 100% !important; border-radius: 8px !important; }
 `;function p4(e){let t=document.getElementById("vegord-rtl-css");if(e&&!t){let o=document.createElement("style");o.id="vegord-rtl-css",o.textContent=_k,document.head.appendChild(o)}else!e&&t&&t.remove()};function vgTg(e){let t=window.__vcTgObs;if(e){if(!t){let tag=()=>{let a=[...document.querySelectorAll("[class*='messageListItem']")];let isM=l=>!!l&&typeof l.className=="string"&&l.className.includes("messageListItem");let id=()=>{try{return L.getCurrentUser()?.id}catch{return null}};let authorOf=n=>{if(!n)return null;if(typeof n.className=="string"&&n.className.includes("isAuthor"))return{key:"__own",own:!0};if(n.querySelector?.("[class*='isAuthor']"))return{key:"__own",own:!0};let k=Object.keys(n).find(c=>c.startsWith("__reactFiber$")||c.startsWith("__reactInternalInstance$"));if(!k)return null;let f=n[k],u=id();for(;f;f=f.return){let m=f.memoizedProps?.message;if(m&&m.author){let au=m.author;return{key:String(au.id??au.username??""),own:!!u&&String(au.id)===String(u)}}}return null};a.forEach(n=>{let au=authorOf(n),key=au&&au.key,ow=!!(au&&au.own);n.classList.toggle("vc-own-message",ow);let p=n.previousElementSibling,s=n.nextElementSibling,a1=authorOf(p),a2=authorOf(s),first=!isM(p)||!key||!a1||a1.key!==key,last=!isM(s)||!key||!a2||a2.key!==key;n.classList.toggle("vc-tg-first",first);n.classList.toggle("vc-tg-last",last);n.classList.toggle("vc-tg-only",first&&last);n.querySelectorAll("[class*='timestamp']").forEach(t=>{let a=(t.getAttribute&&t.getAttribute("aria-label"))||t.textContent||"";let m=String(a).match(/[0-9٠-٩]{1,2}:[0-9٠-٩]{2}(?:\s*[AP]\.?M\.?)?/i);m&&t.textContent!==m[0]&&(t.textContent=m[0])})})};let o=()=>requestAnimationFrame(tag),n=()=>o();o();window.__vcTgObs=new MutationObserver(n);window.__vcTgObs.observe(document.body,{childList:!0,subtree:!0});window.__vcTgIv=setInterval(o,2e3);let hv=ev=>{let l=ev.target&&ev.target.closest?ev.target.closest("[class*='messageListItem']"):null;l&&document.body.classList.toggle("vc-tg-hover-left",!l.classList.contains("vc-own-message"))};document.addEventListener("mouseover",hv);window.__vcTgHoverH=hv}}else{t&&(t.disconnect(),window.__vcTgObs=void 0);clearInterval(window.__vcTgIv);window.__vcTgIv=void 0;document.querySelectorAll(".vc-own-message,.vc-tg-first,.vc-tg-last,.vc-tg-only").forEach(n=>n.classList.remove("vc-own-message","vc-tg-first","vc-tg-last","vc-tg-only"));document.body.classList.remove("vc-tg-hover-left");window.__vcTgHoverH&&(document.removeEventListener("mouseover",window.__vcTgHoverH),window.__vcTgHoverH=void 0)}}function m4(e){let t=document.getElementById("vegord-vazir-font-link"),o=document.getElementById("vegord-vazir-font-css");if(e&&!t){let n=document.createElement("link");n.id="vegord-vazir-font-link",n.rel="stylesheet",n.type="text/css",n.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(n);let i=document.createElement("style");i.id="vegord-vazir-font-css",i.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(i)}else e||(t&&t.remove(),o&&o.remove())}function Ek({isShown:e}){return r("svg",{viewBox:"0 0 27 27",width:18,height:18,className:"vc-toolbox-icon"},e?r("path",{fill:"currentColor",d:"M12 2C9.24 2 7 4.24 7 7c0 1.45.67 2.76 1.73 3.7L7 13v7c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-7l3.27-2.3C16.33 9.76 17 8.45 17 7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-4 7l2 1.5V16H8v-2.5l2-1.5zm8 0V16h-3v-2.5l2-1.5zM7 18v2h10v-2H7z"}):r("path",{fill:"currentColor",d:"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm1-13h2v6h-2zm0 8h2v2h-2z"}))}function Ok(){let e=Oe(null),[t,o]=k(!1);return r(nn,{position:"bottom",align:"right",animation:nn.Animation.NONE,shouldShow:t,onRequestClose:()=>o(!1),targetElementRef:e,renderPopout:()=>f4(()=>o(!1))},(n,{isShown:i})=>r(Lk,{ref:e,className:"vc-toolbox-btn",onClick:()=>o(s=>!s),tooltip:i?null:"Vegord Toolbox",icon:()=>r(Ek,{isShown:i}),selected:i}))}var Ls=h({name:"vegordToolbox",description:"Adds a button to the titlebar that houses vegord quick actions",tags:["Utility","Developers"],authors:[m.Ven,m.AutumnVN],required:!0,enabledByDefault:!0,settings:Wa,start(){p4(this.settings.store.rtlEnabled),vgTg(this.settings.store.rtlEnabled),m4(this.settings.store.vazirfontEnabled)},stop(){p4(!1),vgTg(!1),m4(!1)},patches:[{find:'?"BACK_FORWARD_NAVIGATION":',replacement:{match:/(trailing:.{0,50}?)\i\.Fragment,(?=\{children:\[)/,replace:"$1$self.TrailingWrapper,"}}],TrailingWrapper({children:e}){return r(p,null,e,r(R,{key:"vc-toolbox",noop:!0},r(Ok,null)))}});function Uk(e){return r("svg",{viewBox:"0 0 24 24",width:24,height:24,fill:"url(#heartGrad)",...e},r("defs",null,r("linearGradient",{id:"heartGrad",x1:"0",y1:"0",x2:"1",y2:"1"},r("stop",{offset:"0%",stopColor:"#8B5CF6"}),r("stop",{offset:"100%",stopColor:"#D946EF"}))),r("path",{d:"M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"}))}function Bk(){let{showPluginMenu:e}=Wa.use(["showPluginMenu"]),t=_v();return e?r(C.MenuItem,{id:"plugins",label:"Plugins",action:()=>En(La)},t):null}function Fk(){let{rtlEnabled:e,vazirfontEnabled:t}=Wa.use(["rtlEnabled","vazirfontEnabled"]);return r(p,null,r(C.MenuCheckboxItem,{id:"vegord-toolbox-rtl",label:"Message Bubble",checked:e,action:()=>{let o=!e;Wa.store.rtlEnabled=o,p4(o),vgTg(o)}}),r(C.MenuCheckboxItem,{id:"vegord-toolbox-vazirfont",label:"Vazirmatn Font",checked:t,action:()=>{let o=!t;if(Wa.store.vazirfontEnabled=o,o){if(!document.getElementById("vegord-vazir-font-link")){let i=document.createElement("link");i.id="vegord-vazir-font-link",i.rel="stylesheet",i.type="text/css",i.href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css",document.head.appendChild(i);let s=document.createElement("style");s.id="vegord-vazir-font-css",s.textContent="body{font-family:Vazirmatn,sans-serif!important}",document.head.appendChild(s)}}else{let n=document.getElementById("vegord-vazir-font-link");n&&n.remove();let i=document.getElementById("vegord-vazir-font-css");i&&i.remove()}}}))}function _v(e=!1){let t=Re().plugins,[o,n]=k(""),i=o.toLowerCase(),s=me(()=>Object.values(qe).sort((c,u)=>c.name.localeCompare(u.name)),[]),a=me(()=>s.filter(c=>!Ie(c.name)||c.name.endsWith("API")?!1:c.name.toLowerCase().includes(i)),[i]);return r(p,null,r(C.MenuControlItem,{id:"plugins-search",control:(c,u)=>r(C.MenuSearchControl,{...c,query:o,onChange:n,ref:u})}),r(C.MenuSeparator,null),a.map(c=>{let u=[],d=!1;if(c.settings)for(let[v,S]of Object.entries(c.settings.def)){if(Ra(c.settings,S))continue;d=!0;let b=t[c.name],y={id:`${c.name}-${v}`,key:v,label:Mn(ec(v)),disabled:Zo(c.settings,S)};switch(S.type){case 3:u.push(r(C.MenuCheckboxItem,{...y,checked:b[v],action:()=>{b[v]=!b[v],S.restartNeeded&&Ue("Restart to apply the change")}}));break;case 4:u.push(r(C.MenuItem,{...y},S.options.map(w=>r(C.MenuRadioItem,{group:`${c.name}-${v}`,id:`${c.name}-${v}-${w.value}`,key:w.label,label:w.label,checked:b[v]===w.value,action:()=>{b[v]=w.value,S.restartNeeded&&Ue("Restart to apply the change")}}))));break;case 5:if(S.stickToMarkers||S.componentProps)continue;u.push(r(C.MenuControlItem,{...y,control:(w,I)=>r(C.MenuSliderControl,{ref:I,...w,minValue:S.markers[0],maxValue:S.markers.at(-1),value:b[v],onChange:T=>b[v]=T})}));break}}let f=u.length>0;return!f&&!(e&&d)?null:r(C.MenuItem,{id:`${c.name}-menu`,key:c.name,label:c.name,action:()=>Tr(c)},f&&r(p,null,r(C.MenuGroup,{label:c.name},u),r(C.MenuSeparator,null),r(C.MenuItem,{id:`${c.name}-open`,label:"Open Settings",action:()=>Tr(c)})))}))}function $k(){return r(C.MenuItem,{id:"themes",label:"Themes",action:()=>En(Ds)},Ev())}function Ev(){let{useQuickCss:e,enabledThemes:t}=Re(["useQuickCss","enabledThemes"]),[o]=lt(vegordMod.themes.getThemesList);return r(p,null,r(C.MenuCheckboxItem,{id:"toggle-quickcss",checked:e,label:"Enable QuickCSS",action:()=>{de.useQuickCss=!e}}),r(C.MenuItem,{id:"edit-quickcss",label:"Edit QuickCSS",action:()=>vegordMod.quickCss.openEditor()}),r(C.MenuItem,{id:"manage-themes",label:"Manage Themes",action:()=>En(Ds)}),!!o?.length&&r(C.MenuGroup,null,o.map(n=>r(C.MenuCheckboxItem,{id:`theme-${n.fileName}`,key:n.fileName,label:n.name,checked:t.includes(n.fileName),action:()=>{t.includes(n.fileName)?de.enabledThemes=t.filter(i=>i!==n.fileName):de.enabledThemes=[...t,n.fileName]}}))))}function Gk(){let e=[];for(let o of Object.values(qe))if(o.toolboxActions&&Ie(o.name)){let n=typeof o.toolboxActions=="function"?o.toolboxActions():Object.entries(o.toolboxActions).map(([i,s])=>{let a=`${o.name}-${i}`;return r(C.MenuItem,{id:a,key:a,label:i,action:s})});if(!n||Array.isArray(n)&&n.length===0)continue;e.push({plugin:o,node:r(C.MenuGroup,{label:o.name,key:`${o.name}-group`},n)})}if(e.length<=5)return e.map(o=>o.node);let t=e.map(({node:o,plugin:n})=>r(C.MenuItem,{id:`${n.name}-menu`,key:`${n.name}-menu`,label:n.name,action:()=>Tr(n)},o));return r(C.MenuGroup,null,t)}function f4(e){return r(C.Menu,{navId:"vc-toolbox",onClose:e},r(C.MenuItem,{id:"vegord-donate",label:r("span",{style:{color:"#8B5CF6",backgroundColor:"#1a1a2e",textAlign:"center",display:"flex",justifyContent:"center",width:"100%",borderRadius:"6px",padding:"4px 8px"}},"Donate"),icon:Uk,action:()=>window.open("https://vergoboy.ir/donate","_blank")}),r(C.MenuItem,{id:"notifications",label:"Open Notification Log",action:_a}),Fk(),$k(),Bk(),Gk())}N();ge();ue();pe();H();x();l();(window.vegordStyles??=new Map).set("src/plugins/betterSettings/fullHeightContext.css",{name:"src/plugins/betterSettings/fullHeightContext.css",source:`/*
  * Discord has dumb max height logic for their context menus.
  * If a context menu is at the bottom of the screen, its submenus are capped to its max height and can't even grow upwards

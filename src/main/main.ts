@@ -18,6 +18,7 @@ import { join } from "path";
 import { startAnnouncements } from "./announcements";
 import { flushBeforeQuit, logInfo, startConnectionLog } from "./connectionLog";
 import { DATA_DIR } from "./constants";
+import { registerCspOverrides } from "./csp";
 import { logProxyStatus, startQualitySnapshot } from "./dohControl";
 import { closeFileLog, fileLog, initFileLog } from "./fileLog";
 import { createFirstLaunchTour } from "./firstLaunch";
@@ -182,6 +183,8 @@ function init() {
     });
 
     app.whenReady().then(async () => {
+        registerCspOverrides();
+
         if (process.platform === "win32") app.setAppUserModelId("dev.vegord.vegord");
         if (process.platform === "linux") {
             try {
