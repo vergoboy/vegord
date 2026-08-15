@@ -120,17 +120,16 @@ function init() {
             console.log("[Proxy] TLS MITM enabled: accepting local self-signed Discord cert");
         }
 
-        // Force all WebRTC traffic through proxy (critical for voice to work over SOCKS5).
-        // With the Discord split tunnel enabled this is intentionally skipped: the TUN
-        // routes Discord IPs at the kernel level, so WebRTC UDP is allowed to go direct
-        // and is captured by the tunnel (relayed back through the proxy by tun2proxy).
-        const tunTunnel = Settings.store.discordTunTunnel === true;
-        if (tunTunnel) {
-            console.log("[Voice] Split tunnel enabled: WebRTC UDP goes direct into the TUN");
-        } else {
-            app.commandLine.appendSwitch("webrtc-ip-handling-policy", "disable_non_proxied_udp");
-            console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
-        }
+        // Voice must ALWAYS go through the SOCKS5 relay. The Discord split
+        // tunnel cannot capture WebRTC UDP on its own: voice media server IPs
+        // are ICE-negotiated at runtime in a different address range than
+        // Discord's DoH-resolved edge network, so they never land in the TUN
+        // routing table (table 100 is fed only from DoH resolution plus
+        // record_extra_ip, which requires packets to already traverse the
+        // relay). Letting WebRTC go direct while the tunnel is on would send
+        // voice packets over the raw network with no protection at all.
+        app.commandLine.appendSwitch("webrtc-ip-handling-policy", "disable_non_proxied_udp");
+        console.log("[Voice] WebRTC forced through proxy (disable_non_proxied_udp)");
 
         // Support TTS on Linux using https://wiki.archlinux.org/title/Speech_dispatcher
         // Only enable when the speechd daemon is actually installed: without it,
@@ -148,9 +147,7 @@ function init() {
         }
 
         // Log voice-relevant Chrome flags for debugging
-        console.log(
-            `[Voice] Proxy SOCKS5=127.0.0.1:4500, WebRTC=${tunTunnel ? "direct (TUN split)" : "disable_non_proxied_udp"}`
-        );
+        console.log(`[Voice] Proxy SOCKS5=${getProxyAddress()}, WebRTC=disable_non_proxied_udp`);
     }
 
     disabledFeatures.forEach(feat => enabledFeatures.delete(feat));
