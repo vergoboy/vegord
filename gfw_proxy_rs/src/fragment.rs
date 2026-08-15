@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use std::time::Duration;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
@@ -14,18 +15,17 @@ const TLS_EXT_HOST_NAME: u8 = 0x00; // server_name list entry type "host_name"
 /// gets reset, so 24 leaves a safe margin while still being a real cut.
 const FIRST_FRAGMENT_SIZE: usize = 24;
 
-/// Locate the byte offset of the SNI hostname inside a TLS ClientHello.
+/// Locate the SNI hostname inside a TLS ClientHello.
 ///
-/// The spec requires splitting exactly at the SNI extension offset rather than
-/// at a random index over the whole buffer: random splits often miss the SNI
-/// field entirely, wasting a meaningful fraction of attempts against SNI-based
-/// DPI. When the ClientHello carries an SNI, this returns the offset where the
-/// hostname string itself begins, so the two resulting writes never carry the
-/// full hostname contiguously in one TCP segment.
+/// Returns `(hostname_offset, hostname_len)` where `hostname_offset` is the byte
+/// offset where the hostname string itself begins. The fragmentation splits the
+/// hostname in the middle, so no single TCP segment ever carries the full name
+/// contiguously (single-segment SNI matchers cannot hit). When the ClientHello
+/// carries no SNI (e.g. TLS to a raw IP) this returns `None`.
 ///
 /// Returns `None` when the record is not a TLS handshake, is truncated, or has
-/// no server_name extension (e.g. TLS to a raw IP with no SNI).
-pub fn find_sni_offset(data: &[u8]) -> Option<usize> {
+/// no server_name extension.
+pub fn find_sni_offset(data: &[u8]) -> Option<(usize, usize)> {
     // TLS record header: content type(1) + version(2) + length(2)
     if data.len() < 5 || data[0] != TLS_RECORD_HANDSHAKE {
         return None;
@@ -103,7 +103,7 @@ pub fn find_sni_offset(data: &[u8]) -> Option<usize> {
             if name_len == 0 || list_start + 3 + name_len > list_start + list_len {
                 return None;
             }
-            return Some(list_start + 3);
+            return Some((list_start + 3, name_len));
         }
 
         off += ext_len;
@@ -114,10 +114,10 @@ pub fn find_sni_offset(data: &[u8]) -> Option<usize> {
 
 /// Split `data` at the given index, producing up to `num_fragment` pieces.
 /// The first cut is always early (see `FIRST_FRAGMENT_SIZE`) so the first TCP
-/// segment is too small to be TLS-fingerprinted; the SNI cut is kept as the
-/// second structural cut so the hostname is never contiguous in one segment.
-/// The remainder is subdivided evenly so the total fragment count is respected
-/// without reintroducing random offsets.
+/// segment is too small to be TLS-fingerprinted; the SNI cut is placed
+/// mid-hostname so the name is never contiguous in one segment. The remainder
+/// is subdivided evenly so the total fragment count is respected without
+/// reintroducing random offsets.
 fn cut_points(length: usize, num_fragment: usize, split_at: usize) -> Vec<usize> {
     let early = FIRST_FRAGMENT_SIZE.min(length.saturating_sub(1)).max(1);
     let mut cuts = vec![early];
@@ -157,11 +157,16 @@ where
     }
 
     // First cut is early (defeats first-segment TLS fingerprinting by on-path
-    // DPI); then cut exactly at the SNI hostname offset so the name is never
-    // contiguous in a single segment. Fallback for non-TLS / no-SNI payloads is
-    // a fixed third-of-the-buffer point (deterministic, not random).
-    let sni_offset = find_sni_offset(data);
-    let primary = sni_offset.unwrap_or_else(|| length / 3).clamp(1, length - 1);
+    // DPI); the SNI cut is placed mid-hostname so the full name is never
+    // contiguous in a single TCP segment. Fallback for non-TLS / no-SNI
+    // payloads is a fixed third-of-the-buffer point (deterministic, not random).
+    let primary = match find_sni_offset(data) {
+        Some((host_start, name_len)) => {
+            let mid = host_start + name_len / 2;
+            mid.clamp(1, length - 1)
+        }
+        None => length / 3,
+    };
     let cuts = cut_points(length, num_fragment, primary);
 
     let sleep_dur = Duration::from_millis(fragment_sleep_ms);
@@ -179,6 +184,55 @@ where
     if prev < length {
         writer.write_all(&data[prev..length]).await?;
         writer.flush().await?;
+    }
+
+    Ok(())
+}
+
+/// Blocking twin of `send_fragmented_async` for the local TLS MITM path, whose
+/// upstream handshake runs on a dedicated std-IO thread (the proxy speaks its
+/// own rustls ClientHello there and must fragment it exactly like a client
+/// would, or the DPI fingerprint rule resets the connection).
+pub fn send_fragmented_blocking<W>(
+    writer: &mut W,
+    data: &[u8],
+    num_fragment: usize,
+    fragment_sleep_ms: u64,
+) -> io::Result<()>
+where
+    W: Write,
+{
+    let length = data.len();
+    if length <= 1 || num_fragment <= 1 {
+        writer.write_all(data)?;
+        writer.flush()?;
+        return Ok(());
+    }
+
+    let primary = match find_sni_offset(data) {
+        Some((host_start, name_len)) => {
+            let mid = host_start + name_len / 2;
+            mid.clamp(1, length - 1)
+        }
+        None => length / 3,
+    };
+    let cuts = cut_points(length, num_fragment, primary);
+
+    let sleep_dur = Duration::from_millis(fragment_sleep_ms);
+    let mut prev = 0usize;
+
+    for &idx in &cuts {
+        writer.write_all(&data[prev..idx])?;
+        writer.flush()?;
+        prev = idx;
+        if fragment_sleep_ms > 0 {
+            std::thread::sleep(sleep_dur);
+        }
+    }
+
+    if prev < length {
+        writer.write_all(&data[prev..length])?;
+        writer.flush()?;
     }
 
     Ok(())

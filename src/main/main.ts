@@ -112,6 +112,14 @@ function init() {
             console.log(`[Proxy] Using proxy: ${getProxyAddress()}`);
         }
 
+        // Our proxy terminates Discord TLS with a locally-generated self-signed
+        // certificate, so Chromium must accept it. Only ever happens for
+        // Discord hosts; we never proxy anything else.
+        if (Settings.store.tlsMitm === true || process.env.VEGORD_TLS_MITM === "1") {
+            app.commandLine.appendSwitch("ignore-certificate-errors");
+            console.log("[Proxy] TLS MITM enabled: accepting local self-signed Discord cert");
+        }
+
         // Force all WebRTC traffic through proxy (critical for voice to work over SOCKS5).
         // With the Discord split tunnel enabled this is intentionally skipped: the TUN
         // routes Discord IPs at the kernel level, so WebRTC UDP is allowed to go direct

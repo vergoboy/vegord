@@ -4,6 +4,7 @@ mod control;
 mod discord;
 mod doh;
 mod fragment;
+mod mitm;
 mod preset;
 mod proxy;
 mod stats;
@@ -57,6 +58,9 @@ async fn main() -> std::io::Result<()> {
         if let Some(relay) = config::parse_relay_socks5(&spec) {
             config.relay_socks5 = Some(relay);
         }
+    }
+    if let Ok(v) = env::var("VEGORD_TLS_MITM") {
+        config.tls_mitm = v == "1" || v.eq_ignore_ascii_case("true");
     }
     if let Ok(v) = env::var("VEGORD_TUN_SPLIT") {
         config.tun_split_enabled = v == "1" || v.eq_ignore_ascii_case("true");
@@ -115,6 +119,10 @@ async fn main() -> std::io::Result<()> {
                 }
                 i += 2;
             }
+            "--tls-mitm" => {
+                config.tls_mitm = true;
+                i += 1;
+            }
             "--tun-split" => {
                 config.tun_split_enabled = true;
                 i += 1;
@@ -157,9 +165,15 @@ async fn main() -> std::io::Result<()> {
             relay.port
         );
     }
+    if config.tls_mitm {
+        println!(
+            "[{}] [MITM] Local TLS MITM enabled for Discord hosts (app must run with --ignore-certificate-errors)",
+            stats::now_iso()
+        );
+    }
 
     println!(
-        "[{}] [INIT] Vegord Rust GFW Proxy v3.5.0 starting on port {} (data dir: {})",
+        "[{}] [INIT] Vegord Rust GFW Proxy v3.6.0 starting on port {} (data dir: {})",
         stats::now_iso(),
         config.listen_port,
         config.data_dir.display()
@@ -169,6 +183,7 @@ async fn main() -> std::io::Result<()> {
     let doh_client = DohClient::new(config.clone(), Arc::clone(&discord_mgr));
     let stats_mgr = StatsManager::new(config.clone(), Arc::clone(&doh_client), Arc::clone(&discord_mgr));
     let tun_mgr = tun::TunManager::new(&config);
+    let mitm_mgr = mitm::MitmManager::new();
 
     // Start background Discord IP benchmarking & ping loop
     discord_mgr.clone().start_pinger(config.clone());
@@ -234,22 +249,35 @@ async fn main() -> std::io::Result<()> {
         doh_probe.probe_and_select().await;
     });
 
+    // Fragmentation override knob, shared between the proxy, the preset
+    // benchmark and the control API. The benchmark tries several
+    // (num_fragment, sleep_ms) configs on real relayed traffic via this knob;
+    // POST /frag lets the Electron main (or a user) override it live.
+    let frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>> =
+        Arc::new(parking_lot::RwLock::new(None));
+
     // Localhost control API for the Electron main process.
     let ctrl_doh = Arc::clone(&doh_client);
     let ctrl_discord = Arc::clone(&discord_mgr);
     let ctrl_stats = Arc::clone(&stats_mgr);
     let ctrl_tun = Arc::clone(&tun_mgr);
+    let ctrl_frag = Arc::clone(&frag_override);
     let ctrl_token = config.control_token.clone();
     tokio::spawn(async move {
-        control::run_control_server(ctrl_doh, ctrl_discord, ctrl_stats, ctrl_tun, config.control_port, &ctrl_token).await;
+        control::run_control_server(
+            ctrl_doh,
+            ctrl_discord,
+            ctrl_stats,
+            ctrl_tun,
+            ctrl_frag,
+            config.control_port,
+            &ctrl_token,
+        )
+        .await;
     });
 
     // ISP-aware preset sync: benchmark this network, save a local preset,
     // fetch/apply a validated server preset when available (spec section 4).
-    // The fragmentation override knob is shared with the proxy so the benchmark
-    // can try several configs on real relayed traffic.
-    let frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>> =
-        Arc::new(parking_lot::RwLock::new(None));
     let preset_doh = Arc::clone(&doh_client);
     let preset_discord = Arc::clone(&discord_mgr);
     let preset_cfg = config.clone();
@@ -266,6 +294,7 @@ async fn main() -> std::io::Result<()> {
         stats_mgr,
         frag_override,
         tun_mgr,
+        mitm_mgr,
     );
 
     proxy_server.run(listener).await

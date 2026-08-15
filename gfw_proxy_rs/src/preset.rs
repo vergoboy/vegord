@@ -149,8 +149,10 @@ pub async fn run_preset_sync(
             // With an upstream SOCKS5 relay configured, Discord no longer uses
             // the fragmented path at all, so the benchmark is skipped.
             let proxy_url = format!("http://127.0.0.1:{}", config.listen_port);
+            let mut bench_ok = false;
             if config.relay_socks5.is_none() {
                 if let Some((n, s)) = benchmark_fragmentation(&proxy_url, &frag_override).await {
+                    bench_ok = true;
                     config.num_fragment = n;
                     config.fragment_sleep_ms = s;
                     // Leave the override in place for the rest of this session so
@@ -167,7 +169,18 @@ pub async fn run_preset_sync(
                 }
             }
 
-            let measured = build_measured_preset(&config, &doh, &discord, &fingerprint);
+            // Only claim a measurement when one actually happened. With an
+            // upstream relay the fragmented path is bypassed entirely (nothing
+            // to measure); when the benchmark fails 0/3 for every candidate the
+            // saved values are just defaults or a stale preset, not a finding.
+            let confidence = if config.relay_socks5.is_some() {
+                "relay"
+            } else if bench_ok {
+                "measured"
+            } else {
+                "unknown"
+            };
+            let measured = build_measured_preset(&config, &doh, &discord, &fingerprint, confidence);
             save_measured_preset(&config, &measured);
 
             // Prefer a validated, aggregated server preset over our single
@@ -256,6 +269,7 @@ fn build_measured_preset(
     doh: &Arc<DohClient>,
     discord: &Arc<DiscordManager>,
     fingerprint: &str,
+    confidence: &str,
 ) -> Preset {
     // DoH resolvers ranked by the most recent probe pass, then the static list
     // as a stable tiebreaker for servers that have not been probed yet.
@@ -288,7 +302,7 @@ fn build_measured_preset(
         schema_version: PRESET_SCHEMA_VERSION,
         isp_fingerprint: fingerprint.to_string(),
         generated_at: now_iso(),
-        confidence: "measured".to_string(),
+        confidence: confidence.to_string(),
         fragmentation: FragmentationPreset {
             num_fragment: config.num_fragment,
             fragment_sleep_ms: config.fragment_sleep_ms,

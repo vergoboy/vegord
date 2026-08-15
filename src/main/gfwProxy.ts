@@ -143,6 +143,10 @@ function spawnProxy() {
             proxyArgs.push("--relay-socks5", relaySpec);
             console.log(`${logPrefix} Discord traffic will use upstream SOCKS5 relay ${relaySpec.split("@").pop()}`);
         }
+        if (Settings.store.tlsMitm === true || process.env.VEGORD_TLS_MITM === "1") {
+            proxyArgs.push("--tls-mitm");
+            console.log(`${logPrefix} Discord TLS will be terminated locally (self-signed cert + rustls upstream)`);
+        }
         if (Settings.store.discordTunTunnel === true) {
             const tun2Proxy = findTun2ProxyBinary();
             if (tun2Proxy) {

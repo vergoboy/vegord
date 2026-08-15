@@ -12,6 +12,7 @@ use crate::config::{Config, RelayConfig};
 use crate::discord::DiscordManager;
 use crate::doh::DohClient;
 use crate::fragment::send_fragmented_async;
+use crate::mitm::{self, MitmManager};
 use crate::stats::{now_iso, StatsManager};
 use crate::tun::{self, TunManager};
 
@@ -21,6 +22,7 @@ pub struct ProxyServer {
     discord: Arc<DiscordManager>,
     stats: Arc<StatsManager>,
     tun: Arc<TunManager>,
+    mitm: Arc<MitmManager>,
     // Temporary fragmentation override used by the preset benchmark phase to
     // try several (num_fragment, sleep_ms) configs on real traffic without
     // touching the process-wide config. None = use config defaults.
@@ -35,6 +37,7 @@ impl ProxyServer {
         stats: Arc<StatsManager>,
         frag_override: Arc<parking_lot::RwLock<Option<(usize, u64)>>>,
         tun: Arc<TunManager>,
+        mitm: Arc<MitmManager>,
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
@@ -42,6 +45,7 @@ impl ProxyServer {
             discord,
             stats,
             tun,
+            mitm,
             frag_override,
         })
     }
@@ -505,7 +509,19 @@ impl ProxyServer {
 
         if let Some(backend) = backend {
             let resp = b"HTTP/1.1 200 Connection established\r\nProxy-agent: VegordProxy/3.0\r\n\r\n";
-            if client.write_all(resp).await.is_ok() {
+            let ok = client.write_all(resp).await.is_ok();
+            if ok && self.config.tls_mitm && DiscordManager::is_discord_domain(host) {
+                println!("[{}] [MITM] {} local TLS termination", now_iso(), host);
+                mitm::spawn(
+                    client,
+                    backend,
+                    host.to_string(),
+                    self.current_frag(),
+                    Arc::clone(&self.mitm),
+                    self.config.connect_deadline_sec,
+                    self.config.bulk_transfer_deadline_sec,
+                );
+            } else if ok {
                 self.relay_bidirectional(client, backend, host, port, &targets, false)
                     .await;
             }
@@ -697,7 +713,19 @@ impl ProxyServer {
 
         if let Some(backend) = backend {
             let resp = b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00";
-            if client.write_all(resp).await.is_ok() {
+            let ok = client.write_all(resp).await.is_ok();
+            if ok && self.config.tls_mitm && DiscordManager::is_discord_domain(host) {
+                println!("[{}] [MITM] {} local TLS termination", now_iso(), host);
+                mitm::spawn(
+                    client,
+                    backend,
+                    host.to_string(),
+                    self.current_frag(),
+                    Arc::clone(&self.mitm),
+                    self.config.connect_deadline_sec,
+                    self.config.bulk_transfer_deadline_sec,
+                );
+            } else if ok {
                 self.relay_bidirectional(client, backend, host, port, &targets, false)
                     .await;
             }
@@ -905,11 +933,16 @@ impl ProxyServer {
             return;
         }
 
-        // Send the ClientHello with TLS SNI fragmentation. If the connection is
-        // reset mid-handshake (GFW RST against Cloudflare etc.), the client has
-        // not received anything yet — it is still waiting for the ServerHello —
-        // so we can transparently reconnect to the same or an alternate IP and
-        // resend the exact same ClientHello.
+        // Send the ClientHello. TLS SNI fragmentation is the anti-SNI-filter
+        // technique, but it must be applied ONLY to Discord SNIs: the ISP DPI
+        // resets unfragmented Discord handshakes, yet a fragmented handshake to
+        // ANY other host (DoH resolvers, google, etc.) is itself reset by the
+        // same filter. Every non-Discord host therefore goes out in a single
+        // segment. If the connection is reset mid-handshake (GFW RST against
+        // Cloudflare etc.), the client has not received anything yet — it is
+        // still waiting for the ServerHello — so we can transparently reconnect
+        // to the same or an alternate IP and resend the exact same ClientHello.
+        let fragment_tls = DiscordManager::is_discord_domain(host);
         let mut ip_idx = 0usize;
         let max_relay_attempts = self.config.relay_retries.max(1);
         let mut delivered = false;
@@ -923,21 +956,36 @@ impl ProxyServer {
                     ip_idx = (ip_idx + 1) % targets.len();
                 }
                 let ip = targets[ip_idx];
-                println!("[{}] [FRAG RETRY] {} via {}", now_iso(), host, ip);
+                println!(
+                    "[{}] [{}] {} via {}",
+                    now_iso(),
+                    if fragment_tls { "FRAG RETRY" } else { "RETRY" },
+                    host,
+                    ip
+                );
                 match self.connect_target(ip, port).await {
                     Ok(stream) => backend = stream,
                     Err(_) => continue,
                 }
             }
 
-            match send_fragmented_async(
-                &mut backend,
-                &first_buf[..first_n],
-                frag.0,
-                frag.1,
-            )
-            .await
-            {
+            let send_result = if fragment_tls {
+                send_fragmented_async(
+                    &mut backend,
+                    &first_buf[..first_n],
+                    frag.0,
+                    frag.1,
+                )
+                .await
+            } else {
+                async {
+                    backend.write_all(&first_buf[..first_n]).await?;
+                    backend.flush().await?;
+                    Ok(())
+                }
+                .await
+            };
+            match send_result {
                 Ok(()) => {}
                 Err(err) => {
                     eprintln!(

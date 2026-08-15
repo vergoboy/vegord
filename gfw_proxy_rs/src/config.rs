@@ -94,6 +94,13 @@ pub struct Config {
     // Upstream SOCKS5 relay for Discord (bypasses the Cloudflare-Spectrum dead
     // end). None = legacy direct/offline-DNS path.
     pub relay_socks5: Option<RelayConfig>,
+    // Local TLS MITM for Discord hosts: the proxy terminates the app's TLS
+    // with a self-signed cert for the target host (the app must run with
+    // --ignore-certificate-errors) and re-connects upstream with its own rustls
+    // stack. This is the only way past ISPs that fingerprint BoringSSL: the
+    // app's BoringSSL ClientHello never leaves loopback, and the proxy's rustls
+    // ClientHello (fragmented) passes the DPI. Off by default.
+    pub tls_mitm: bool,
     // Split-tunnel: tun2proxy relays a TUN device (which routes only Discord
     // IPs) into our own SOCKS5 entry point. Off by default; requires
     // CAP_NET_ADMIN on the gfw_proxy binary (setcap at install).
@@ -144,6 +151,7 @@ impl Default for Config {
             panel_timeout_sec: 6,
             panel_upload_token: String::new(),
             relay_socks5: None,
+            tls_mitm: false,
             tun_split_enabled: false,
             tun_name: "vegord0".to_string(),
             tun_fwmark: 0x54f,
@@ -329,25 +337,17 @@ pub fn get_offline_dns() -> &'static HashMap<&'static str, &'static str> {
     })
 }
 
-/// Resolve a host through the static offline-DNS map, falling back to suffix
-/// rules for domains whose every subdomain needs the same relay path (Discord:
-/// all subdomains land in IP-blocked ranges and the SNI-forwarding relay at
-/// 203.32.120.226 — Cloudflare Spectrum — is the only way past the block).
+/// Resolve a host through the static offline-DNS map. Used only for bootstrap
+/// hosts whose handshake must reach a known clean IP (DoH servers, etc.).
+/// Discord domains are deliberately NOT mapped here — neither the apex nor any
+/// subdomain: they must resolve via DoH so the real Discord anycast IPs
+/// (162.159.x.x2x) land in the ping pool and are routed directly with
+/// ClientHello fragmentation. The old suffix rules pointed every *.discord.*
+/// subdomain at the ISP's SNI-forwarding host 203.32.120.226, but Cloudflare
+/// Spectrum rejects that path with 1034 "Edge IP Restricted", so it only
+/// poisoned the pool; keeping the apex out but routing subdomains there was
+/// also inconsistent. Removing the suffix rules makes apex and subdomains
+/// behave the same.
 pub fn resolve_offline_dns(host: &str) -> Option<&'static str> {
-    if let Some(ip) = get_offline_dns().get(host) {
-        return Some(ip);
-    }
-    static SUFFIXES: &[(&str, &str)] = &[
-        (".discord.com", "203.32.120.226"),
-        (".discordapp.com", "203.32.120.226"),
-        (".discordapp.net", "203.32.120.226"),
-        (".discord.gg", "203.32.120.226"),
-        (".discord.media", "203.32.120.226"),
-    ];
-    for (suffix, ip) in SUFFIXES {
-        if host.ends_with(suffix) {
-            return Some(ip);
-        }
-    }
-    None
+    get_offline_dns().get(host).copied()
 }

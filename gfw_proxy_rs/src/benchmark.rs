@@ -37,11 +37,10 @@ const BENCH_REQUEST_TIMEOUT: Duration = Duration::from_secs(6);
 // caller keeps the previously-saved preset instead of churning on noise.
 const TRIES_PER_CANDIDATE: usize = 3;
 const MIN_OK_TRIES: usize = 3;
-// Benchmark probe: the real service that needs SNI-bypass. The ISP's transparent
-// relay (Cloudflare Spectrum at 203.32.120.226, offline-DNS-mapped) forwards
-// discord.com by SNI, so any HTTP response here proves the fragmentation got the
-// ClientHello past the GFW. (The 403/1034 that comes back is Discord's own
-// security block and is irrelevant to fragmentation selection.)
+// Benchmark probe: the real service that needs SNI-bypass. discord.com is
+// resolved via DoH to the real Discord anycast IPs, so any HTTP response here
+// (200, or Discord's own 403/1034 security block) proves the fragmentation got
+// the ClientHello past the GFW; a timeout/HTTP 0 means the handshake was reset.
 const BENCH_URL: &str = "https://discord.com/api/v9/gateway";
 
 /// Run the full fragmentation benchmark through the given proxy address.

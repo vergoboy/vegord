@@ -11,8 +11,13 @@ use crate::doh::DohClient;
 use crate::stats::{now_iso, StatsManager};
 use crate::tun::TunManager;
 
+/// Live fragmentation override (None = use process config). Shared with the
+/// proxy so POST /frag takes effect on subsequent relayed ClientHellos.
+pub type FragOverride = parking_lot::RwLock<Option<(usize, u64)>>;
+
 /// Localhost-only control HTTP server for the Electron main process:
 ///   POST /scan   -> trigger an immediate DoH probe/rescan
+///   POST /frag   -> set/clear the live fragmentation override
 ///   GET  /status -> current DoH + probe ranking + connection stats
 ///
 /// Every request must carry `Authorization: Bearer <token>` (or the `token`
@@ -27,6 +32,7 @@ pub async fn run_control_server(
     discord: Arc<DiscordManager>,
     stats: Arc<StatsManager>,
     tun: Arc<TunManager>,
+    frag_override: Arc<FragOverride>,
     port: u16,
     token: &str,
 ) {
@@ -46,9 +52,10 @@ pub async fn run_control_server(
         let discord = Arc::clone(&discord);
         let stats = Arc::clone(&stats);
         let tun = Arc::clone(&tun);
+        let frag_override = Arc::clone(&frag_override);
         let token = token.clone();
         tokio::spawn(async move {
-            let mut buf = [0u8; 2048];
+            let mut buf = [0u8; 4096];
             let n = match timeout(Duration::from_secs(5), socket.read(&mut buf)).await {
                 Ok(Ok(n)) if n > 0 => n,
                 _ => return,
@@ -59,6 +66,11 @@ pub async fn run_control_server(
             let method = parts.next().unwrap_or("");
             let path_full = parts.next().unwrap_or("/");
             let path = path_full.split('?').next().unwrap_or("/");
+            // Body after the header separator (e.g. the POST /frag JSON).
+            let req_body = req
+                .split_once("\r\n\r\n")
+                .map(|(_, b)| b.trim().to_string())
+                .unwrap_or_default();
 
             // Extract the bearer token / query token for auth.
             let auth = req
@@ -84,7 +96,10 @@ pub async fn run_control_server(
                     doh.trigger_rescan("control-api");
                     r#"{"ok":true}"#.to_string()
                 }
-                ("GET", "/status", true) => status_json(&doh, &discord, &stats, &tun),
+                ("POST", "/frag", true) => {
+                    set_frag_override(&frag_override, &req_body)
+                }
+                ("GET", "/status", true) => status_json(&doh, &discord, &stats, &tun, &frag_override),
                 ("GET", "/status", false) => {
                     let _ = socket
                         .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
@@ -109,11 +124,36 @@ pub async fn run_control_server(
     }
 }
 
+fn set_frag_override(frag_override: &Arc<FragOverride>, body: &str) -> String {
+    use serde_json::Value;
+    let value: Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => {
+            return r#"{"ok":false,"error":"expected {\"num\":N,\"sleep\":MS} or {\"clear\":true}"}"#
+                .to_string()
+        }
+    };
+    if value.get("clear").and_then(Value::as_bool).unwrap_or(false) {
+        *frag_override.write() = None;
+        return r#"{"ok":true,"num":null}"#.to_string();
+    }
+    let num = value.get("num").and_then(Value::as_u64);
+    let sleep = value.get("sleep").and_then(Value::as_u64);
+    match (num, sleep) {
+        (Some(n), Some(s)) if n > 0 => {
+            *frag_override.write() = Some((n as usize, s));
+            format!(r#"{{"ok":true,"num":{},"sleepMs":{}}}"#, n, s)
+        }
+        _ => r#"{"ok":false,"error":"num must be > 0 with a sleep"}"#.to_string(),
+    }
+}
+
 fn status_json(
     doh: &Arc<DohClient>,
     discord: &Arc<DiscordManager>,
     stats: &Arc<StatsManager>,
     tun: &Arc<TunManager>,
+    frag_override: &Arc<FragOverride>,
 ) -> String {
     use serde_json::json;
 
@@ -152,6 +192,11 @@ fn status_json(
     let (conn_total, conn_ok, conn_filtered) = stats.conn_counts();
     let (ul_bytes, dl_bytes) = stats.traffic_totals();
 
+    let (frag_num, frag_sleep) = match *frag_override.read() {
+        Some((n, s)) => (n, s),
+        None => (0, 0),
+    };
+
     json!({
         "ok": true,
         "currentDohIndex": idx,
@@ -160,6 +205,11 @@ fn status_json(
         "totalSwitches": doh.total_switch_count.load(std::sync::atomic::Ordering::Relaxed),
         "discordBestIp": best_ip,
         "discordBestRtt": best_rtt,
+        "fragOverride": {
+            "active": frag_num > 0,
+            "num": if frag_num > 0 { json!(frag_num) } else { json!(null) },
+            "sleepMs": if frag_num > 0 { json!(frag_sleep) } else { json!(null) }
+        },
         "connections": {
             "total": conn_total,
             "ok": conn_ok,

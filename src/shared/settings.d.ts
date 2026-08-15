@@ -47,6 +47,9 @@ export interface Settings {
     /** Discord-only split tunnel via tun2proxy (default off). Requires CAP_NET_ADMIN on the gfw_proxy and tun2proxy binaries (applied by setcap at package install). When on, the proxy spawns tun2proxy, routes only Discord IPs into the TUN, and lets WebRTC UDP flow direct into the tunnel instead of via SOCKS. */
     discordTunTunnel?: boolean;
 
+    /** Terminate Discord TLS locally with a self-signed cert and re-connect with the proxy's own rustls stack (default off). App runs with --ignore-certificate-errors to accept the local cert. This defeats DPI that fingerprint-matches Chromium/BoringSSL even through the proxy. */
+    tlsMitm?: boolean;
+
     audio?: {
         workaround?: boolean;
 

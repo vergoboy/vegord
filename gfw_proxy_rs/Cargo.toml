@@ -1,6 +1,6 @@
 [package]
 name = "gfw_proxy"
-version = "3.3.0"
+version = "3.6.0"
 edition = "2021"
 authors = ["Vergoboy <vergoboy@riseup.net>"]
 description = "GFW-Resistant High-Performance SOCKS5/HTTP Proxy with TLS ClientHello Fragmentation, Multi-DoH Racing, and Discord Voice/Video Optimization in Rust"
@@ -20,6 +20,14 @@ rtnetlink = "0.21"
 socket2 = { version = "0.6", features = ["all"] }
 libc = "0.2"
 futures-util = "0.3"
+# Local TLS MITM for Discord hosts: rustls for both the app-facing TLS server
+# (self-signed cert, accepted via Chromium's --ignore-certificate-errors) and
+# the upstream TLS client (a non-BoringSSL stack whose fragmented ClientHello
+# passes the ISP DPI). rcgen mints the per-host self-signed certs; webpki-roots
+# verifies the real upstream Discord certificate.
+rustls = { version = "0.22", default-features = false, features = ["ring", "logging", "tls12"] }
+rcgen = "0.13"
+webpki-roots = "0.26"
 
 [profile.release]
 opt-level = 3
