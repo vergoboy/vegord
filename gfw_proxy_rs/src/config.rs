@@ -91,6 +91,11 @@ pub struct Config {
     pub panel_timeout_sec: u64,
     // Consent-gated preset upload: empty disables upload entirely.
     pub panel_upload_token: String,
+    // Preferred DoH resolver index into DOH_SERVERS, seeded from the last saved
+    // preset's doh_resolvers_ranked so a known-good server (learned last run)
+    // is tried first on startup instead of always starting at index 0.
+    // None = default behavior (start at DOH_SERVERS[0]).
+    pub preferred_doh_index: Option<usize>,
     // Upstream SOCKS5 relay for Discord (bypasses the Cloudflare-Spectrum dead
     // end). None = legacy direct/offline-DNS path.
     pub relay_socks5: Option<RelayConfig>,
@@ -150,6 +155,7 @@ impl Default for Config {
             panel_base_url: "https://vergoboy.ir/vegord/api/v1".to_string(),
             panel_timeout_sec: 6,
             panel_upload_token: String::new(),
+            preferred_doh_index: None,
             relay_socks5: None,
             tls_mitm: false,
             tun_split_enabled: false,

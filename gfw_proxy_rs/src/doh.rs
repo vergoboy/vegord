@@ -94,13 +94,15 @@ impl DohClient {
             DOH_SERVERS.len()
         ];
 
+        let start_doh_index = config.preferred_doh_index.unwrap_or(0);
+
         Arc::new(Self {
             config,
             http_client,
             dns_cache: RwLock::new(HashMap::new()),
             pending: parking_lot::RwLock::new(HashMap::new()),
             discord_mgr,
-            current_doh_index: AtomicUsize::new(0),
+            current_doh_index: AtomicUsize::new(start_doh_index),
             total_queries: AtomicU64::new(0),
             successful_queries: AtomicU64::new(0),
             failed_queries: AtomicU64::new(0),

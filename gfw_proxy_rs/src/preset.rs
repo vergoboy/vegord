@@ -91,6 +91,13 @@ pub fn apply_preset_to_config(config: &mut Config) {
     if preset.voice_port_timeout_sec >= 1 {
         config.udp_loss_window_sec = preset.voice_port_timeout_sec;
     }
+    // Seed the DoH start index from the last saved ranking so a known-good
+    // resolver (e.g. one that was only reachable via index 7 last run) is
+    // tried first on startup instead of always burning timeouts on
+    // DOH_SERVERS[0..] in order. Missing/unknown entries fall back to index 0.
+    if let Some(top) = preset.doh_resolvers_ranked.first() {
+        config.preferred_doh_index = DOH_SERVERS.iter().position(|u| u == top);
+    }
     println!(
         "[{}] [PRESET] applied {} (frag={}x{}ms, confidence={})",
         now_iso(),
