@@ -587,6 +587,15 @@ impl DohClient {
             }
         }
 
+        // Never leave current_doh_index parked on a server that failed but
+        // never crossed the blacklist threshold (loop exhausted mid-streak,
+        // e.g. 3 fails -> blacklist+switch -> only 2 tries left for the next
+        // server). Force a switch so the next query does not retry the same
+        // dead resolver.
+        if fail_count > 0 {
+            self.switch_doh();
+        }
+
         self.failed_queries.fetch_add(1, Ordering::Relaxed);
         println!(
             "[{}] [DNS FAIL] All DoH servers failed for {}",
