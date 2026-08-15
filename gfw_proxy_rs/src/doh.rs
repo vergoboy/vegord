@@ -458,6 +458,7 @@ impl DohClient {
         );
 
         let mut fail_count = 0;
+        let mut fail_kind = "";
         let max_tries = std::cmp::min(DOH_SERVERS.len(), self.config.doh_max_retries);
 
         for _attempt in 0..max_tries {
@@ -528,6 +529,7 @@ impl DohClient {
                                         idx,
                                         server_name
                                     );
+                                    fail_kind = "no_a";
                                 }
                             }
                         }
@@ -540,6 +542,7 @@ impl DohClient {
                             resp.status(),
                             server_name
                         );
+                        fail_kind = "http";
                     }
                     Err(err) => {
                         if err.is_timeout() {
@@ -552,19 +555,35 @@ impl DohClient {
                         } else {
                             println!("[{}] [DoH ERR] Server #{}: {}", now_iso(), idx, err);
                         }
+                        fail_kind = "error";
                     }
                 }
             }
 
-            {
-                let mut perf = self.doh_perf.write();
-                perf[idx].fail_count += 1;
-            }
-            fail_count += 1;
-            if fail_count >= self.config.doh_max_fails_before_switch {
-                self.blacklist_current();
+            let is_critical = DiscordManager::is_discord_domain(server_name)
+                || server_name.ends_with("vergoboy.ir");
+            // A valid DNS answer with no A record is the resolver answering
+            // correctly. For domains guaranteed to exist (Discord, the panel)
+            // an empty answer is a resolver-side problem; for asset subdomains
+            // (e.g. badges.vegord.dev) it is a domain issue — advance to the
+            // next resolver without blacklisting, so a healthy resolver is not
+            // poisoned for 300s over one unknown domain.
+            let resolver_broken = fail_kind == "error"
+                || fail_kind == "http"
+                || (fail_kind == "no_a" && is_critical);
+            if resolver_broken {
+                {
+                    let mut perf = self.doh_perf.write();
+                    perf[idx].fail_count += 1;
+                }
+                fail_count += 1;
+                if fail_count >= self.config.doh_max_fails_before_switch {
+                    self.blacklist_current();
+                    self.switch_doh();
+                    fail_count = 0;
+                }
+            } else if fail_kind == "no_a" {
                 self.switch_doh();
-                fail_count = 0;
             }
         }
 
