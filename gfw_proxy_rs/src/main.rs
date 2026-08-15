@@ -71,6 +71,11 @@ async fn main() -> std::io::Result<()> {
     if let Ok(name) = env::var("VEGORD_TUN_NAME") {
         config.tun_name = name;
     }
+    if let Ok(v) = env::var("VEGORD_RELAY_IDLE_TIMEOUT") {
+        if let Ok(sec) = v.parse::<u64>() {
+            config.relay_idle_timeout_sec = sec;
+        }
+    }
 
     // Apply the last known-good preset (local benchmark or downloaded server
     // preset) BEFORE CLI parsing so explicit user flags always win over the

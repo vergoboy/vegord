@@ -65,6 +65,13 @@ pub struct Config {
     // bulk-transfer deadline is an overall ceiling, not an idle ceiling.
     pub connect_deadline_sec: u64,
     pub bulk_transfer_deadline_sec: u64,
+    // Idle timeout for the steady-state relay: fires only when ZERO bytes have
+    // moved in either direction for N seconds (a truly stuck connection, e.g. a
+    // silently dropped upstream during a CDN upload, or a peer that vanished
+    // without RST/EOF). Slow-but-alive transfers keep making progress and are
+    // never killed by this; it only reaps genuinely dead connections that would
+    // otherwise hang until the bulk-transfer deadline.
+    pub relay_idle_timeout_sec: u64,
     pub doh_max_retries: usize,
     pub doh_max_fails_before_switch: u32,
     pub doh_blacklist_sec: u64,
@@ -132,6 +139,7 @@ impl Default for Config {
             relay_handshake_timeout_sec: 2,
             connect_deadline_sec: 10,
             bulk_transfer_deadline_sec: 600,
+            relay_idle_timeout_sec: 120,
             doh_max_retries: 5,
             doh_max_fails_before_switch: 3,
             doh_blacklist_sec: 300,

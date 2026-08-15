@@ -120,7 +120,7 @@ export const vegordNative = {
     upload: {
         pick: () =>
             invoke<
-                { canceled: true } | { url: string; name: string; size: number; bytes: Uint8Array } | { error: string }
+                { canceled: true } | { url: string; name: string; size: number } | { error: string }
             >(IpcEvents.VEGORD_UPLOAD),
         onProgress(cb: (p: { sent: number; total: number }) => void) {
             ipcRenderer.on(IpcEvents.VEGORD_UPLOAD_PROGRESS, (_e, p: { sent: number; total: number }) => cb(p));

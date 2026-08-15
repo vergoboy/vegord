@@ -520,6 +520,7 @@ impl ProxyServer {
                     Arc::clone(&self.mitm),
                     self.config.connect_deadline_sec,
                     self.config.bulk_transfer_deadline_sec,
+                    self.config.relay_idle_timeout_sec,
                 );
             } else if ok {
                 self.relay_bidirectional(client, backend, host, port, &targets, false)
@@ -724,6 +725,7 @@ impl ProxyServer {
                     Arc::clone(&self.mitm),
                     self.config.connect_deadline_sec,
                     self.config.bulk_transfer_deadline_sec,
+                    self.config.relay_idle_timeout_sec,
                 );
             } else if ok {
                 self.relay_bidirectional(client, backend, host, port, &targets, false)
@@ -1075,8 +1077,10 @@ impl ProxyServer {
     /// runs to completion independently (tokio::join!). When one direction
     /// hits EOF it performs a real TCP half-close (shutdown) on the opposite
     /// write half, and the connection is only torn down once BOTH directions
-    /// have finished. An overall bulk-transfer deadline is the only way the
-    /// relay is force-closed (guards genuinely dead connections).
+    /// have finished. The relay is force-closed only by the bulk-transfer
+    /// deadline (overall ceiling) or the relay_idle_timeout_sec idle timeout
+    /// (zero bytes in either direction), both of which are logged so a silently
+    /// failed CDN upload is diagnosable.
     async fn relay_copy_loop(
         &self,
         mut client: TcpStream,
@@ -1091,6 +1095,17 @@ impl ProxyServer {
         let stats_ul = Arc::clone(&self.stats);
         let stats_dl = Arc::clone(&self.stats);
 
+        // Idle timeout: wall-clock of the last byte moved in EITHER direction.
+        // Fires only when the whole connection has been silent for
+        // relay_idle_timeout_sec — a slow upload keeps resetting it, so it is
+        // never killed; a connection whose peer silently vanished (GFW drop
+        // with no RST, half-dead CDN mid-upload) is reaped and logged instead
+        // of hanging the app until the bulk-transfer deadline.
+        let idle_limit = Duration::from_secs(self.config.relay_idle_timeout_sec.max(1));
+        let last_activity = Arc::new(std::sync::atomic::AtomicU64::new(now_ms()));
+        let last_activity_ul = Arc::clone(&last_activity);
+        let last_activity_dl = Arc::clone(&last_activity);
+
         let client_to_backend = async move {
             let mut buf = [0u8; 16384];
             loop {
@@ -1101,11 +1116,27 @@ impl ProxyServer {
                     }
                     Ok(n) => {
                         if bw.write_all(&buf[..n]).await.is_err() {
+                            println!(
+                                "[{}] [RELAY CLOSE] {}:{} app->backend write failed",
+                                now_iso(),
+                                host,
+                                port
+                            );
                             break;
                         }
                         stats_ul.record_ul(ip, n as u64);
+                        last_activity_ul.store(now_ms(), Ordering::Relaxed);
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        println!(
+                            "[{}] [RELAY CLOSE] {}:{} app->backend read error: {}",
+                            now_iso(),
+                            host,
+                            port,
+                            e
+                        );
+                        break;
+                    }
                 }
             }
         };
@@ -1120,32 +1151,77 @@ impl ProxyServer {
                     }
                     Ok(n) => {
                         if cw.write_all(&buf[..n]).await.is_err() {
+                            println!(
+                                "[{}] [RELAY CLOSE] {}:{} backend->app write failed",
+                                now_iso(),
+                                host,
+                                port
+                            );
                             break;
                         }
                         stats_dl.record_dl(ip, n as u64);
+                        last_activity_dl.store(now_ms(), Ordering::Relaxed);
                     }
-                    Err(_) => break,
+                    Err(e) => {
+                        println!(
+                            "[{}] [RELAY CLOSE] {}:{} backend->app read error: {}",
+                            now_iso(),
+                            host,
+                            port,
+                            e
+                        );
+                        break;
+                    }
                 }
             }
         };
 
         let deadline = tokio::time::sleep(Duration::from_secs(self.config.bulk_transfer_deadline_sec));
         tokio::pin!(deadline);
+        let mut idle_sleep = Box::pin(tokio::time::sleep(idle_limit));
         let relay = async {
-            let _ = tokio::join!(client_to_backend, backend_to_client);
+            tokio::join!(client_to_backend, backend_to_client);
         };
         tokio::pin!(relay);
-        tokio::select! {
-            _ = &mut deadline => {
-                println!(
-                    "[{}] [RELAY DEADLINE] {}:{} exceeded {}s, closing",
-                    now_iso(),
-                    host,
-                    port,
-                    self.config.bulk_transfer_deadline_sec
-                );
+
+        loop {
+            tokio::select! {
+                _ = &mut deadline => {
+                    println!(
+                        "[{}] [RELAY DEADLINE] {}:{} exceeded {}s, closing",
+                        now_iso(),
+                        host,
+                        port,
+                        self.config.bulk_transfer_deadline_sec
+                    );
+                    break;
+                }
+                _ = &mut idle_sleep => {
+                    let last = last_activity.load(Ordering::Relaxed);
+                    if now_ms().saturating_sub(last) >= idle_limit.as_millis() as u64 {
+                        println!(
+                            "[{}] [RELAY IDLE TIMEOUT] {}:{} no data in either direction for {}s, closing",
+                            now_iso(),
+                            host,
+                            port,
+                            idle_limit.as_secs()
+                        );
+                        break;
+                    }
+                    idle_sleep = Box::pin(tokio::time::sleep(idle_limit));
+                }
+                _ = &mut relay => break,
             }
-            _ = &mut relay => {}
         }
     }
+}
+
+/// Milliseconds since the UNIX epoch (wall clock), used for the relay idle
+/// tracker so activity in one direction resets the timeout for the whole
+/// connection.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }

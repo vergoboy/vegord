@@ -240,11 +240,13 @@ fn drain_plaintext<D1: SideData, D2: SideData>(
 }
 
 fn relay_plaintext<D1: SideData, D2: SideData>(
+    host: &str,
     server_conn: &mut ConnectionCommon<D1>,
     server_stream: &mut StdTcpStream,
     client_conn: &mut ConnectionCommon<D2>,
     client_stream: &mut StdTcpStream,
     deadline: Instant,
+    idle_limit: Duration,
 ) -> io::Result<()> {
     server_stream.set_read_timeout(Some(Duration::from_millis(150)))?;
     client_stream.set_read_timeout(Some(Duration::from_millis(150)))?;
@@ -254,9 +256,22 @@ fn relay_plaintext<D1: SideData, D2: SideData>(
     let mut client_eof = false; // upstream side
     let mut server_close_sent = false;
     let mut client_close_sent = false;
+    let mut last_progress = Instant::now();
 
     loop {
         if Instant::now() > deadline {
+            return Ok(());
+        }
+        // Idle timeout: fires only when the WHOLE relay has been silent for
+        // idle_limit (zero bytes both ways). A slow upload keeps resetting it;
+        // a connection whose peer silently vanished is reaped and logged.
+        if Instant::now().duration_since(last_progress) > idle_limit {
+            println!(
+                "[{}] [MITM IDLE TIMEOUT] {} no data in either direction for {}s, closing",
+                now_iso(),
+                host,
+                idle_limit.as_secs()
+            );
             return Ok(());
         }
         let mut progress = false;
@@ -310,7 +325,9 @@ fn relay_plaintext<D1: SideData, D2: SideData>(
         if server_eof && client_eof {
             break;
         }
-        if !progress {
+        if progress {
+            last_progress = Instant::now();
+        } else {
             std::thread::sleep(Duration::from_millis(5));
         }
     }
@@ -318,6 +335,7 @@ fn relay_plaintext<D1: SideData, D2: SideData>(
 }
 
 /// Blocking MITM handler run on a dedicated thread.
+#[allow(clippy::too_many_arguments)]
 fn run_blocking(
     client: tokio::net::TcpStream,
     backend: tokio::net::TcpStream,
@@ -326,6 +344,7 @@ fn run_blocking(
     mitm: Arc<MitmManager>,
     handshake_deadline_sec: u64,
     relay_deadline_sec: u64,
+    relay_idle_timeout_sec: u64,
 ) -> io::Result<()> {
     let mut server_stream: StdTcpStream = client.into_std()?;
     let mut client_stream: StdTcpStream = backend.into_std()?;
@@ -366,12 +385,15 @@ fn run_blocking(
 
     // 3. Relay decrypted bytes both ways.
     let relay_deadline = Instant::now() + Duration::from_secs(relay_deadline_sec.max(10));
+    let idle_limit = Duration::from_secs(relay_idle_timeout_sec.max(1));
     match relay_plaintext(
+        &host,
         &mut *server_conn,
         &mut server_stream,
         &mut *client_conn,
         &mut client_stream,
         relay_deadline,
+        idle_limit,
     ) {
         Ok(()) => println!("[{}] [MITM] {} relay ended clean", now_iso(), host),
         Err(e) => println!("[{}] [MITM] {} relay ended: {}", now_iso(), host, e),
@@ -380,6 +402,7 @@ fn run_blocking(
 }
 
 /// Spawn the MITM relay for a connected pair of streams on a dedicated thread.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn(
     client: tokio::net::TcpStream,
     backend: tokio::net::TcpStream,
@@ -388,6 +411,7 @@ pub fn spawn(
     mitm: Arc<MitmManager>,
     handshake_deadline_sec: u64,
     relay_deadline_sec: u64,
+    relay_idle_timeout_sec: u64,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let host_err = host.clone();
@@ -399,6 +423,7 @@ pub fn spawn(
             mitm,
             handshake_deadline_sec,
             relay_deadline_sec,
+            relay_idle_timeout_sec,
         ) {
             eprintln!(
                 "[{}] [MITM ERR] {} - {}",

@@ -25,8 +25,13 @@
  * semi-transparent surface with backdrop blur and hard-coded color fallbacks.
  * They are anchored to the chat card so they always stay inside it instead of
  * sliding over the channel list. Uploaded files come back from the main
- * process as raw bytes (the renderer can't fetch the external URL due to
- * CORS), are rebuilt into a File, and dropped into the composer.
+ * process as a URL, which is inserted into the composer as a link (the file is
+ * already hosted on vergoboy.ir, so it is sent as a link, not re-uploaded to
+ * Discord's CDN).
+ *
+ * Manual QA (regression): pick a file via the widget and confirm (a) the URL
+ * text appears in the composer (visible before hitting Send) and (b) sending
+ * the message actually delivers the link to the channel.
  */
 
 type UploadState =
@@ -89,15 +94,49 @@ function moreIconSvg() {
     return `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>`;
 }
 
-/* Feed a real File into Discord's composer as a native attachment preview,
-   exactly like dropping a file onto the chat bar. */
-function dropFileIntoComposer(file: File): boolean {
-    const editor = document.querySelector<HTMLElement>(`${CHAT_BAR_SELECTOR} [role="textbox"]`);
-    if (!editor) return false;
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    editor.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt }));
-    return true;
+/* Insert a URL into Discord's composer as plain text so sending the message
+   includes it as a link — the file is already hosted on vergoboy.ir, so there
+   is no need to re-upload it to Discord's CDN. The composer is a
+   contenteditable editor: dispatch a beforeinput insertText (its inputType is
+   what the editor listens for), falling back to the legacy execCommand path
+   that fires the real input events, then verify the text actually landed. */
+function insertLinkIntoComposer(url: string): Promise<boolean> {
+    return new Promise(resolve => {
+        const editor = document.querySelector<HTMLElement>(`${CHAT_BAR_SELECTOR} [role="textbox"]`);
+        if (!editor) return resolve(false);
+
+        editor.focus();
+        const sel = window.getSelection();
+        if (sel) {
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        const before = editor.textContent?.trim() ?? "";
+        editor.dispatchEvent(
+            new InputEvent("beforeinput", {
+                inputType: "insertText",
+                data: url,
+                bubbles: true,
+                cancelable: true,
+                composed: true
+            })
+        );
+
+        if ((editor.textContent?.trim() ?? "") === before) {
+            document.execCommand("insertText", false, url);
+        }
+
+        // Discord's editor commits asynchronously, so only report success once
+        // the composer actually contains the URL.
+        setTimeout(() => {
+            const after = editor.textContent?.trim() ?? "";
+            resolve(after !== before && after.includes(url));
+        }, 150);
+    });
 }
 
 /* ---------------------------- upload panel ---------------------------- */
@@ -136,7 +175,7 @@ function renderUploadPanel() {
                 <span style="font-size:18px;color:#23a559">\u2714</span>
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:13px;font-weight:600;">Uploaded</div>
-                    <div style="font-size:12px;color:#949ba4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Attachment added to the message box</div>
+                    <div style="font-size:12px;color:#949ba4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Link added to the message box</div>
                 </div>
                 <button data-close style="background:none;border:none;color:#b5bac1;cursor:pointer;font-size:16px;padding:2px 6px;">\u2715</button>
             </div>`;
@@ -181,8 +220,8 @@ async function startUpload() {
             return;
         }
         setUpload({ status: "uploading", name: result.name, sent: 0, total: 0 });
-        const file = new File([new Uint8Array(result.bytes)], result.name, { type: guessMime(result.name) });
-        if (!dropFileIntoComposer(file)) throw new Error("Could not find the message composer");
+        const inserted = await insertLinkIntoComposer(result.url);
+        if (!inserted) throw new Error("Could not insert the link into the message box");
         setUpload({ status: "done", url: result.url, name: result.name });
     } catch (e) {
         setUpload({ status: "error", message: String(e) });
@@ -193,50 +232,6 @@ async function startUpload() {
 
 function escapeHtml(s: string) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-/* Discord guesses attachment types from the File's MIME, so map the file
-   extension to something sane before we rebuild the File from IPC bytes. */
-const MIME_BY_EXT: Record<string, string> = {
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    gif: "image/gif",
-    webp: "image/webp",
-    svg: "image/svg+xml",
-    bmp: "image/bmp",
-    mp4: "video/mp4",
-    webm: "video/webm",
-    mov: "video/quicktime",
-    mkv: "video/x-matroska",
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-    ogg: "audio/ogg",
-    flac: "audio/flac",
-    m4a: "audio/mp4",
-    pdf: "application/pdf",
-    txt: "text/plain",
-    md: "text/markdown",
-    json: "application/json",
-    zip: "application/zip",
-    rar: "application/vnd.rar",
-    "7z": "application/x-7z-compressed",
-    tar: "application/x-tar",
-    gz: "application/gzip",
-    doc: "application/msword",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    xls: "application/vnd.ms-excel",
-    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    csv: "text/csv",
-    psd: "image/vnd.adobe.photoshop",
-    ai: "application/postscript",
-    iso: "application/x-iso9660-image",
-    apk: "application/vnd.android.package-archive",
-    exe: "application/octet-stream"
-};
-function guessMime(name: string) {
-    const ext = name.split(".").pop()?.toLowerCase() ?? "";
-    return MIME_BY_EXT[ext] || "application/octet-stream";
 }
 
 function openNativeMoreMenuAndClick(label: string) {
